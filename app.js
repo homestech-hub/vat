@@ -16,6 +16,8 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 let availableProducts = [];
+// Biến lưu trữ dữ liệu gốc để phục vụ việc lọc ở Tab Báo cáo
+let originalInvoicesData = {};
 
 // --- HÀM TRỢ GIÚP ĐỊNH DẠNG ---
 window.handleMoneyInput = (input) => {
@@ -140,24 +142,65 @@ window.saveProduct = async () => {
     window.toggleModal('modal-sanpham');
 };
 
-// --- HÀM CẬP NHẬT BÁO CÁO ---
+// --- HÀM CẬP NHẬT BÁO CÁO (ĐÃ BỔ SUNG LOGIC LỌC TÌM KIẾM CHO TAB BÁO CÁO) ---
 function updateGeneralReport(invoicesData) {
+    originalInvoicesData = invoicesData; 
+    
+    // Cập nhật danh sách NCC vào ô lọc của Báo cáo
+    const vendorSelectFilter = document.getElementById('reportVendorFilter');
+    if (vendorSelectFilter) {
+        const currentVal = vendorSelectFilter.value;
+        const vendors = [...new Set(Object.values(invoicesData).map(d => d.NhaCungCap))].filter(Boolean).sort();
+        vendorSelectFilter.innerHTML = '<option value="">-- Tất cả nhà cung cấp --</option>';
+        vendors.forEach(v => {
+            vendorSelectFilter.innerHTML += `<option value="${v}" ${v === currentVal ? 'selected' : ''}>${v}</option>`;
+        });
+    }
+
+    // Luôn áp dụng bộ lọc báo cáo mỗi khi dữ liệu thay đổi
+    applyReportFilter();
+}
+
+window.applyReportFilter = () => {
+    const fromDate = document.getElementById('reportFromDate')?.value;
+    const toDate = document.getElementById('reportToDate')?.value;
+    const selectedVendor = document.getElementById('reportVendorFilter')?.value;
+
     let totalChi = 0, totalDon = 0, totalNo = 0;
     let vendorSummary = {};
 
-    Object.entries(invoicesData).forEach(([key, d]) => {
-        const amount = parseInt(d.ThanhTien) || 0;
-        totalChi += amount;
-        totalDon++;
-        if (d.HinhThucThanhToan !== "Đã thanh toán" && d.HinhThucThanhToan !== "Tiền Mặt") totalNo += amount;
+    // Hàm phụ chuyển DD/MM/YYYY sang YYYY-MM-DD
+    const toIso = (str) => {
+        if (!str || !str.includes('/')) return str;
+        const p = str.split('/'); return `${p[2]}-${p[1]}-${p[0]}`;
+    };
 
-        const vName = d.NhaCungCap || "Chưa rõ";
-        if (!vendorSummary[vName]) vendorSummary[vName] = { qty: 0, sum: 0, hasPendingInvoice: false };
-        vendorSummary[vName].qty++;
-        vendorSummary[vName].sum += amount;
-        if (d.TinhTrangHoaDon === "Chưa Nhận HĐ") vendorSummary[vName].hasPendingInvoice = true;
+    Object.entries(originalInvoicesData).forEach(([key, d]) => {
+        const invoiceDateIso = toIso(d.NgayNhap);
+        
+        const matchFrom = !fromDate || invoiceDateIso >= fromDate;
+        const matchTo = !toDate || invoiceDateIso <= toDate;
+        const matchVendor = !selectedVendor || d.NhaCungCap === selectedVendor;
+
+        if (matchFrom && matchTo && matchVendor) {
+            const amount = parseInt(d.ThanhTien) || 0;
+            totalChi += amount;
+            totalDon++;
+            if (d.HinhThucThanhToan === "Công Nợ") totalNo += amount;
+
+            const vName = d.NhaCungCap || "Chưa rõ";
+            if (!vendorSummary[vName]) {
+                vendorSummary[vName] = { qty: 0, sum: 0, hasPendingInvoice: false };
+            }
+            vendorSummary[vName].qty++;
+            vendorSummary[vName].sum += amount;
+            if (d.TinhTrangHoaDon === "Chưa Nhận HĐ") {
+                vendorSummary[vName].hasPendingInvoice = true;
+            }
+        }
     });
 
+    // Cập nhật giao diện Tab Báo cáo
     if (document.getElementById('report-total-amount')) document.getElementById('report-total-amount').innerText = totalChi.toLocaleString('vi-VN') + "đ";
     if (document.getElementById('report-total-invoices')) document.getElementById('report-total-invoices').innerText = totalDon;
     if (document.getElementById('report-unpaid-amount')) document.getElementById('report-unpaid-amount').innerText = totalNo.toLocaleString('vi-VN') + "đ";
@@ -169,10 +212,19 @@ function updateGeneralReport(invoicesData) {
                 <td class="p-4 font-bold">${name}</td>
                 <td class="p-4 text-center">${stat.qty} đơn</td>
                 <td class="p-4 text-right font-bold text-blue-600">${stat.sum.toLocaleString()}đ</td>
-                <td class="p-4 text-center">${stat.hasPendingInvoice ? '<span class="text-red-500 text-xs font-bold">⚠️ Thiếu HĐ</span>' : '<span class="text-green-500 text-xs font-bold">✅ Đủ HĐ</span>'}</td>
+                <td class="p-4 text-center">
+                    ${stat.hasPendingInvoice ? '<span class="text-red-500 text-xs font-bold">⚠️ Thiếu HĐ</span>' : '<span class="text-green-500 text-xs font-bold">✅ Đủ HĐ</span>'}
+                </td>
             </tr>`).join('');
     }
-}
+};
+
+window.resetReportFilter = () => {
+    if (document.getElementById('reportFromDate')) document.getElementById('reportFromDate').value = "";
+    if (document.getElementById('reportToDate')) document.getElementById('reportToDate').value = "";
+    if (document.getElementById('reportVendorFilter')) document.getElementById('reportVendorFilter').value = "";
+    window.applyReportFilter();
+};
 
 // --- KHỞI TẠO ỨNG DỤNG ---
 function initApp() {
@@ -183,7 +235,7 @@ function initApp() {
         if (snapshot.exists()) {
             Object.entries(snapshot.val()).forEach(([key, p]) => {
                 availableProducts.push({ key, ...p });
-                prodTbody.innerHTML += `<tr class="border-b text-sm"><td class="p-4 font-bold text-blue-600">${p.code}</td><td class="p-4">${p.name}</td><td class="p-4 text-right">${(p.cost || 0).toLocaleString()}đ</td><td class="p-4 text-center">${p.unit}</td><td class="p-4 text-center font-bold">${p.stock}</td><td class="p-4 text-center"><button class="text-red-600" onclick="remove(ref(db, 'products/${key}'))"><i class="fas fa-trash"></i></button></td></tr>`;
+                prodTbody.innerHTML += `<tr class="border-b text-sm"><td class="p-4 font-bold text-blue-600">${p.code || ''}</td><td class="p-4">${p.name}</td><td class="p-4 text-right">${(p.cost || 0).toLocaleString()}đ</td><td class="p-4 text-center">${p.unit}</td><td class="p-4 text-center font-bold">${p.stock}</td><td class="p-4 text-center"><button class="text-red-600" onclick="remove(ref(db, 'products/${key}'))"><i class="fas fa-trash"></i></button></td></tr>`;
             });
         }
     });
@@ -194,93 +246,100 @@ function initApp() {
         nccTbody.innerHTML = "";
         if (snapshot.exists()) {
             Object.entries(snapshot.val()).forEach(([key, v]) => {
-                nccTbody.innerHTML += `<tr class="border-b hover:bg-gray-50 text-sm"><td class="p-4 font-bold">${v.code}</td><td class="p-4"><b>${v.name}</b></td><td class="p-4">${v.phone || '-'}</td><td class="p-4 font-mono text-xs">${v.bank || '-'}</td><td class="p-4 text-center"><button onclick="remove(ref(db, 'vendors/${key}'))" class="text-red-500"><i class="fas fa-trash"></i></button></td></tr>`;
+                nccTbody.innerHTML += `<tr class="border-b hover:bg-gray-50 text-sm"><td class="p-4 font-bold">${v.code || ''}</td><td class="p-4"><b>${v.name}</b></td><td class="p-4">${v.phone || '-'}</td><td class="p-4 font-mono text-xs">${v.bank || '-'}</td><td class="p-4 text-center"><button onclick="remove(ref(db, 'vendors/${key}'))" class="text-red-500"><i class="fas fa-trash"></i></button></td></tr>`;
             });
         }
     });
 
-    // 3. Lắng nghe Hóa đơn (Cập nhật hiển thị mỗi SP một dòng)
     onValue(ref(db, 'invoices'), (snapshot) => {
-    const invTbody = document.getElementById('invoiceTableBody'); 
-    if (!invTbody) return;
-    invTbody.innerHTML = "";
-    
-    if (snapshot.exists()) {
-        const data = snapshot.val(); 
-        updateGeneralReport(data);
+        const invTbody = document.getElementById('invoiceTableBody'); 
+        if (!invTbody) return;
+        invTbody.innerHTML = "";
         
-        // --- BƯỚC SẮP XẾP: Chuyển sang mảng và sắp xếp theo ngày gần nhất ---
-        const sortedInvoices = Object.entries(data).sort((a, b) => {
-            // Chuyển đổi chuỗi ngày (NgayNhap) thành đối tượng Date để so sánh
-            // Nếu NgayNhap trống, mặc định là năm 1970 để đẩy xuống cuối
-            const dateA = new Date(a[1].NgayNhap || '1970-01-01');
-            const dateB = new Date(b[1].NgayNhap || '1970-01-01');
-            return dateB - dateA; // Ngày lớn hơn (gần hơn) sẽ đứng trước
-        });
-        
-        // Sử dụng danh sách đã sắp xếp để hiển thị
-        sortedInvoices.forEach(([key, d]) => {
-            // 1. Xử lý màu sắc Thanh toán
-            const isPaid = (d.HinhThucThanhToan === "Đã thanh toán" || d.HinhThucThanhToan === "Tiền Mặt");
-            const payColor = isPaid ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700";
+        if (snapshot.exists()) {
+            const data = snapshot.val(); 
+            updateGeneralReport(data);
             
-            // 2. Xử lý Link Drive
-            let driveLink = "";
-            if (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') driveLink = d.LinkHoaDon.Url;
-            else if (typeof d.LinkHoaDon === 'string') driveLink = d.LinkHoaDon;
-            const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
+            const invoiceArray = Object.entries(data);
 
-            // 3. Render đúng 7 cột (<td>)
-            invTbody.innerHTML += `
-                <tr class="border-b text-sm hover:bg-gray-50">
-                    <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
-                    
-                    <td class="p-4 align-top">
-                        <div class="font-bold text-gray-800 flex items-center gap-1">${d.NhaCungCap || ''} ${driveIcon}</div>
-                        <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
-                            <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
-                        </div>
-                    </td>
-                    
-                    <td class="p-4 text-xs text-gray-600 align-top">
-                        <div class="flex flex-col gap-1.5">
-                            ${(d.ChiTiet || []).map((i, idx) => `
-                                <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
-                                    <span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span>
-                                    <div class="flex flex-col">
-                                        <span class="font-medium">${i.MaSP}</span>
-                                        <span class="text-[10px] text-blue-500 font-bold text-left">SL: ${i.SoLuong}</span>
+            const parseDate = (dateStr) => {
+                if (!dateStr) return 0;
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    return parseInt(parts[2] + parts[1] + parts[0]); 
+                }
+                const d = new Date(dateStr);
+                return isNaN(d.getTime()) ? 0 : d.getTime();
+            };
+
+            invoiceArray.sort((a, b) => parseDate(b[1].NgayNhap) - parseDate(a[1].NgayNhap));
+            
+            invoiceArray.forEach(([key, d]) => {
+                let payLabel = "";
+                let payColor = "";
+                
+                if (d.HinhThucThanhToan === "Công Nợ") {
+                    payLabel = "Chưa thanh toán";
+                    payColor = "bg-red-100 text-red-700";
+                } else if (d.HinhThucThanhToan === "Tiền Mặt" || d.HinhThucThanhToan === "Chuyển Khoản") {
+                    payLabel = "Đã thanh toán";
+                    payColor = "bg-green-100 text-green-700";
+                } else {
+                    payLabel = d.HinhThucThanhToan || "N/A";
+                    payColor = "bg-gray-100 text-gray-700";
+                }
+                
+                let driveLink = "";
+                if (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') driveLink = d.LinkHoaDon.Url;
+                else if (typeof d.LinkHoaDon === 'string') driveLink = d.LinkHoaDon;
+                const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
+
+                invTbody.innerHTML += `
+                    <tr class="border-b text-sm hover:bg-gray-50">
+                        <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
+                        <td class="p-4 align-top">
+                            <div class="font-bold text-gray-800 flex items-center gap-1">${d.NhaCungCap || ''} ${driveIcon}</div>
+                            <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
+                                <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
+                            </div>
+                        </td>
+                        <td class="p-4 text-xs text-gray-600 align-top">
+                            <div class="flex flex-col gap-1.5">
+                                ${(d.ChiTiet || []).map((i, idx) => `
+                                    <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
+                                        <span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span>
+                                        <div class="flex flex-col">
+                                            <span class="font-medium">${i.MaSP}</span>
+                                            <span class="text-[10px] text-blue-500 font-bold text-left">SL: ${i.SoLuong}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </td>
-                    
-                    <td class="p-4 font-mono font-bold text-red-600 text-right align-top">
-                        ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
-                    </td>
-                    
-                    <td class="p-4 text-center align-top">
-                        <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">
-                            ${d.TinhTrangHoaDon || 'Chưa nhận'}
-                        </span>
-                    </td>
-                    
-                    <td class="p-4 text-center align-top">
-                        <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
-                            ${d.HinhThucThanhToan || 'N/A'}
-                        </span>
-                    </td>
-                    
-                    <td class="p-4 text-center align-top">
-                        <button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>`;
-        });
-    }
-});
+                                `).join('')}
+                            </div>
+                        </td>
+                        <td class="p-4 font-mono font-bold text-red-600 text-right align-top">
+                            ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
+                        </td>
+                        <td class="p-4 text-center align-top">
+                            <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">
+                                ${d.TinhTrangHoaDon || 'Chưa nhận'}
+                            </span>
+                        </td>
+                        <td class="p-4 text-center align-top">
+                            <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
+                                ${payLabel}
+                            </span>
+                        </td>
+                        <td class="p-4 text-center align-top">
+                            <button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+            
+            if (typeof window.filterInvoices === 'function') window.filterInvoices();
+        }
+    });
 
     onValue(ref(db, 'salaries'), (snapshot) => {
         const salaryTbody = document.getElementById('salaryTableBody');
@@ -308,3 +367,31 @@ function initApp() {
 
 initApp();
 
+// --- LOGIC LỌC TÌM KIẾM ĐA NĂNG ---
+window.filterInvoices = () => {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const filterDate = document.getElementById('filterDate').value; 
+    const rows = document.querySelectorAll('#invoiceTableBody tr');
+
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        const dateCell = row.querySelector('td:first-child').innerText; 
+        
+        let rowDateIso = "";
+        if (dateCell.includes('/')) {
+            const parts = dateCell.split('/');
+            rowDateIso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+
+        const matchesSearch = text.includes(searchTerm);
+        const matchesDate = !filterDate || rowDateIso === filterDate;
+
+        row.style.display = (matchesSearch && matchesDate) ? "" : "none";
+    });
+};
+
+window.resetFilter = () => {
+    document.getElementById('searchInput').value = "";
+    document.getElementById('filterDate').value = "";
+    window.filterInvoices();
+};
