@@ -10,6 +10,8 @@
         .active-tab { border-bottom: 2px solid #1d4ed8; color: #1d4ed8; font-weight: bold; background: white; }
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* Tối ưu hiển thị bảng trên mobile rà soát nội dung */
+        .overflow-x-auto { scrollbar-width: thin; }
     </style>
     <script>
         (function() {
@@ -32,42 +34,61 @@
     </header>
 
     <main class="container mx-auto mt-6 p-4">
-        <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg overflow-hidden shadow-sm">
-            <button onclick="switchTab('muahang')" id="btn-muahang" class="py-3 px-8 transition active-tab">
+        <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg overflow-hidden shadow-sm overflow-x-auto">
+            <button onclick="switchTab('muahang')" id="btn-muahang" class="py-3 px-8 transition active-tab whitespace-nowrap">
                 <i class="fas fa-shopping-cart mr-2"></i>Mua hàng
             </button>
-            <button onclick="switchTab('sanpham')" id="btn-sanpham" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition">
+            <button onclick="switchTab('sanpham')" id="btn-sanpham" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition whitespace-nowrap">
                 <i class="fas fa-box mr-2"></i>Sản phẩm
             </button>
-            <button onclick="switchTab('ncc')" id="btn-ncc" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition">
+            <button onclick="switchTab('ncc')" id="btn-ncc" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition whitespace-nowrap">
                 <i class="fas fa-truck mr-2"></i>Nhà cung cấp
             </button>
-            <button onclick="switchTab('luong')" id="btn-luong" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition">
+            <button onclick="switchTab('luong')" id="btn-luong" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition whitespace-nowrap">
                 <i class="fas fa-users-cog mr-2"></i>Chi Phí Lương
             </button>
-            <button class="py-3 px-8 text-gray-400 cursor-not-allowed transition">
+            <button class="py-3 px-8 text-gray-400 cursor-not-allowed transition whitespace-nowrap">
                 <i class="fas fa-file-contract mr-2"></i>Hợp đồng (Soon)
             </button>
-            <button onclick="switchTab('baocao')" id="btn-baocao" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition">
+            <button onclick="switchTab('baocao')" id="btn-baocao" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition whitespace-nowrap">
                 <i class="fas fa-chart-line mr-2"></i>Báo cáo
             </button>
         </div>
 
         <section id="section-muahang" class="animate-fade-in">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4 flex flex-col md:flex-row gap-4 items-center">
+                <div class="relative flex-1 w-full">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" id="searchInput" onkeyup="filterInvoices()" 
+                        placeholder="Tìm kiếm theo Nhà cung cấp, Số phiếu, Tên sản phẩm..." 
+                        class="pl-10 w-full border border-gray-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div class="flex gap-2 w-full md:w-auto">
+                    <input type="date" id="filterDate" onchange="filterInvoices()" 
+                        class="border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    <button onclick="resetFilter()" class="text-gray-500 hover:text-red-500 text-sm px-2 flex items-center gap-1">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                </div>
+            </div>
+
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-2xl font-semibold text-gray-800">Danh sách Mua hàng</h2>
                 <button onclick="openInvoiceModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow transition flex items-center gap-2">
                     <i class="fas fa-plus"></i> Thêm mới mua hàng
                 </button>
             </div>
+
             <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-gray-50 text-gray-600 text-sm uppercase">
                                 <th class="p-4 font-semibold border-b">Ngày nhập</th>
-                                <th class="p-4 font-semibold border-b">Nhà cung cấp</th>
-                                <th class="p-4 font-semibold border-b">Nội dung (SP)</th>
+                                <th class="p-4 font-semibold border-b">Nhà cung cấp / Mã phiếu</th>
+                                <th class="p-4 font-semibold border-b">Nội dung (Sản phẩm)</th>
                                 <th class="p-4 font-semibold border-b text-right">Số tiền</th>
                                 <th class="p-4 font-semibold border-b text-center">Tình trạng HĐ</th>
                                 <th class="p-4 font-semibold border-b text-center">Thanh toán</th>
@@ -88,7 +109,7 @@
                 </button>
             </div>
             <div class="bg-white rounded-xl shadow-sm overflow-hidden border">
-                <table class="w-full text-left">
+                <table class="w-full text-left border-collapse">
                     <thead class="bg-gray-50">
                         <tr class="text-sm text-gray-600 uppercase">
                             <th class="p-4 border-b">Mã SP</th>
@@ -111,8 +132,8 @@
                     <i class="fas fa-plus mr-2"></i>Thêm Nhà cung cấp
                 </button>
             </div>
-            <div class="bg-white rounded-xl shadow-sm overflow-hidden border">
-                <table class="w-full text-left">
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                <table class="w-full text-left border-collapse">
                     <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
                         <tr>
                             <th class="p-4 border-b">Mã NCC</th>
@@ -154,6 +175,31 @@
         </section>
 
         <section id="section-baocao" class="hidden animate-fade-in">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Từ ngày</label>
+                    <input type="date" id="reportFromDate" class="border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Đến ngày</label>
+                    <input type="date" id="reportToDate" class="border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Lọc theo Nhà cung cấp</label>
+                    <select id="reportVendorFilter" class="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">-- Tất cả nhà cung cấp --</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="applyReportFilter()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition">
+                        <i class="fas fa-filter mr-1"></i> Lọc dữ liệu
+                    </button>
+                    <button onclick="resetReportFilter()" class="text-gray-500 hover:text-red-500 text-sm px-2 flex items-center gap-1">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                </div>
+            </div>
+
             <h2 class="text-2xl font-bold text-gray-800 mb-6">Báo cáo tổng hợp</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500">
@@ -165,7 +211,7 @@
                     <h2 id="report-total-invoices" class="text-2xl font-black text-green-600">0</h2>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500">
-                    <p class="text-sm text-gray-500 uppercase font-bold">Chưa thanh toán</p>
+                    <p class="text-sm text-gray-500 uppercase font-bold">Chưa thanh toán (Công nợ)</p>
                     <h2 id="report-unpaid-amount" class="text-2xl font-black text-red-600">0đ</h2>
                 </div>
             </div>
@@ -184,8 +230,7 @@
                                 <th class="p-4 border-b text-center">Tình trạng chứng từ</th>
                             </tr>
                         </thead>
-                        <tbody id="report-vendor-body" class="text-sm text-gray-700">
-                            </tbody>
+                        <tbody id="report-vendor-body" class="text-sm text-gray-700"></tbody>
                     </table>
                 </div>
             </div>
@@ -194,9 +239,9 @@
 
     <div id="modal-muahang" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-[60]">
         <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full p-6 overflow-y-auto max-h-[90vh]">
-            <h3 class="text-xl font-bold mb-4">Lập Đơn Mua Hàng</h3>
+            <h3 class="text-xl font-bold mb-4 border-b pb-2">Lập Đơn Mua Hàng</h3>
             <input type="hidden" id="edit_invoice_key">
-            <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase">Nhà cung cấp</label>
                     <select id="vendor" class="w-full border rounded p-2 bg-white">
@@ -222,13 +267,13 @@
                     </select>
                 </div>
             </div>
-            <table class="w-full mb-4 border border-collapse">
+            <table class="w-full mb-4 border border-collapse overflow-x-auto block md:table">
                 <thead class="bg-gray-100 text-xs uppercase">
                     <tr>
-                        <th class="p-2 border">Sản phẩm</th>
+                        <th class="p-2 border min-w-[200px]">Sản phẩm</th>
                         <th class="p-2 border w-20">Số lượng</th>
-                        <th class="p-2 border w-32">Giá nhập</th>
-                        <th class="p-2 border w-24">Thuế (%)</th>
+                        <th class="p-2 border w-32 text-right">Giá nhập</th>
+                        <th class="p-2 border w-24 text-center">Thuế (%)</th>
                         <th class="p-2 border w-32 text-right">Thành tiền</th>
                         <th class="p-2 border w-10"></th>
                     </tr>
@@ -239,11 +284,11 @@
                 <i class="fas fa-plus mr-1"></i> Thêm dòng sản phẩm
             </button>
             <div class="border-t pt-4 text-right">
-                <p class="text-xl font-bold">Tổng: <span id="totalAmountDisplay" class="text-red-600">0</span>đ</p>
+                <p class="text-xl font-bold">Tổng: <span id="totalAmountDisplay" class="text-red-600 font-mono">0</span>đ</p>
             </div>
             <div class="flex justify-end gap-3 mt-6">
-                <button onclick="toggleModal('modal-muahang')" class="px-4 py-2 text-gray-500">Hủy</button>
-                <button onclick="saveInvoice()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg">Lưu Đơn Hàng</button>
+                <button onclick="toggleModal('modal-muahang')" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
+                <button onclick="saveInvoice()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg transition hover:bg-blue-700">Lưu Đơn Hàng</button>
             </div>
         </div>
     </div>
@@ -260,7 +305,7 @@
             </div>
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="toggleModal('modal-sanpham')" class="px-4 py-2 text-gray-500">Hủy</button>
-                <button onclick="saveProduct()" class="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold">Lưu</button>
+                <button onclick="saveProduct()" class="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md">Lưu</button>
             </div>
         </div>
     </div>
