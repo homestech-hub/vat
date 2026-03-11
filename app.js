@@ -200,62 +200,78 @@ function initApp() {
     });
 
     // 3. Lắng nghe Hóa đơn (Cập nhật hiển thị mỗi SP một dòng)
-    onValue(ref(db, 'invoices'), (snapshot) => {
-        const invTbody = document.getElementById('invoiceTableBody');
-        if (!invTbody) return;
-        invTbody.innerHTML = "";
-
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            updateGeneralReport(data);
+    // --- LẮNG NGHE HÓA ĐƠN (BẢN FIX TRIỆT ĐỂ LỆCH CỘT) ---
+onValue(ref(db, 'invoices'), (snapshot) => {
+    const invTbody = document.getElementById('invoiceTableBody'); 
+    if (!invTbody) return;
+    invTbody.innerHTML = "";
+    
+    if (snapshot.exists()) {
+        const data = snapshot.val(); 
+        updateGeneralReport(data);
+        
+        Object.entries(data).reverse().forEach(([key, d]) => {
+            // 1. Xử lý màu sắc Thanh toán
+            const isPaid = (d.HinhThucThanhToan === "Đã thanh toán" || d.HinhThucThanhToan === "Tiền Mặt");
+            const payColor = isPaid ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700";
             
-            Object.entries(data).reverse().forEach(([key, d]) => {
-                const payColor = (d.HinhThucThanhToan === "Đã thanh toán" || d.HinhThucThanhToan === "Tiền Mặt") 
-                                 ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700";
-                
-                let driveLink = "";
-                if (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') driveLink = d.LinkHoaDon.Url;
-                else if (typeof d.LinkHoaDon === 'string') driveLink = d.LinkHoaDon;
-                const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive text-[10px]"></i></a>` : "";
+            // 2. Xử lý Link Drive
+            let driveLink = "";
+            if (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') driveLink = d.LinkHoaDon.Url;
+            else if (typeof d.LinkHoaDon === 'string') driveLink = d.LinkHoaDon;
+            const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
 
-                invTbody.innerHTML += `
-                    <tr class="border-b text-sm hover:bg-gray-50">
-                        <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
-                        <td class="p-4 align-top">
-                            <div class="font-bold text-gray-800 flex items-center gap-1">
-                                ${d.NhaCungCap || ''} ${driveIcon}
-                            </div>
-                            <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
-                                <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
-                            </div>
-                        </td>
-                        <td class="p-4 text-xs text-gray-600 align-top">
-                            <div class="flex flex-col gap-1.5">
-                                ${(d.ChiTiet || []).map((i, index) => `
-                                    <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
-                                        <span class="text-gray-300 font-mono text-[10px] mt-0.5">${index + 1}</span>
-                                        <div class="flex flex-col">
-                                            <span class="font-medium text-gray-700">${i.MaSP}</span>
-                                            <span class="text-[10px] text-blue-500 font-bold">SL: ${i.SoLuong}</span>
-                                        </div>
+            // 3. Render đúng 7 cột (<td>)
+            invTbody.innerHTML += `
+                <tr class="border-b text-sm hover:bg-gray-50">
+                    <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
+                    
+                    <td class="p-4 align-top">
+                        <div class="font-bold text-gray-800 flex items-center gap-1">${d.NhaCungCap || ''} ${driveIcon}</div>
+                        <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
+                            <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
+                        </div>
+                    </td>
+                    
+                    <td class="p-4 text-xs text-gray-600 align-top">
+                        <div class="flex flex-col gap-1.5">
+                            ${(d.ChiTiet || []).map((i, idx) => `
+                                <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
+                                    <span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span>
+                                    <div class="flex flex-col">
+                                        <span class="font-medium">${i.MaSP}</span>
+                                        <span class="text-[10px] text-blue-500 font-bold text-left">SL: ${i.SoLuong}</span>
                                     </div>
-                                `).join('')}
-                            </div>
-                        </td>
-                        <td class="p-4 font-mono font-bold text-red-600 text-right align-top">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</td>
-                        <td class="p-4 text-center align-top">
-                            <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${d.HinhThucThanhToan || 'N/A'}</span>
-                        </td>
-                        <td class="p-4 text-center text-gray-400 text-[11px] align-top">${d.TinhTrangHoaDon || ''}</td>
-                        <td class="p-4 text-center align-top">
-                            <button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>`;
-            });
-        } else {
-            updateGeneralReport({});
-        }
-    });
+                                </div>
+                            `).join('')}
+                        </div>
+                    </td>
+                    
+                    <td class="p-4 font-mono font-bold text-red-600 text-right align-top">
+                        ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
+                    </td>
+                    
+                    <td class="p-4 text-center align-top">
+                        <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">
+                            ${d.TinhTrangHoaDon || 'Chưa nhận'}
+                        </span>
+                    </td>
+                    
+                    <td class="p-4 text-center align-top">
+                        <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
+                            ${d.HinhThucThanhToan || 'N/A'}
+                        </span>
+                    </td>
+                    
+                    <td class="p-4 text-center align-top">
+                        <button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    }
+});
 
     onValue(ref(db, 'salaries'), (snapshot) => {
         const salaryTbody = document.getElementById('salaryTableBody');
