@@ -15,7 +15,6 @@
         (function() {
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
             if (isMobile) {
-                // Chuyển hướng đến file mobile.html
                 window.location.href = 'mobile.html';
             }
         })();
@@ -42,6 +41,9 @@
             </button>
             <button onclick="switchTab('ncc')" id="btn-ncc" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition">
                 <i class="fas fa-truck mr-2"></i>Nhà cung cấp
+            </button>
+            <button onclick="switchTab('luong')" id="btn-luong" class="py-3 px-8 text-gray-500 hover:text-blue-600 transition">
+                <i class="fas fa-users-cog mr-2"></i>Chi Phí Lương
             </button>
             <button class="py-3 px-8 text-gray-400 cursor-not-allowed transition">
                 <i class="fas fa-file-contract mr-2"></i>Hợp đồng (Soon)
@@ -125,6 +127,32 @@
             </div>
         </section>
 
+        <section id="section-luong" class="hidden animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold text-gray-800">Quản lý Chi phí Lương</h2>
+                <button onclick="openSalaryModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow transition flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Thêm phiếu lương
+                </button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-sm uppercase">
+                                <th class="p-4 font-semibold border-b">Tháng/Năm</th>
+                                <th class="p-4 font-semibold border-b">Nhân viên / Nội dung</th>
+                                <th class="p-4 font-semibold border-b">Ghi chú</th>
+                                <th class="p-4 font-semibold border-b text-right">Tổng cộng</th>
+                                <th class="p-4 font-semibold border-b text-center">Trạng thái</th>
+                                <th class="p-4 font-semibold border-b text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salaryTableBody" class="text-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <section id="section-baocao" class="hidden animate-fade-in">
             <h2 class="text-2xl font-bold text-gray-800 mb-6">Báo cáo tổng hợp</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -140,20 +168,6 @@
                     <p class="text-sm text-gray-500 uppercase font-bold">Chưa thanh toán</p>
                     <h2 id="report-unpaid-amount" class="text-2xl font-black text-red-600">0đ</h2>
                 </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-md overflow-hidden border">
-                <div class="p-4 bg-gray-50 border-b font-bold text-gray-700 uppercase text-sm">Chi tiết theo Nhà cung cấp</div>
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-gray-100 text-xs uppercase text-gray-600">
-                        <tr>
-                            <th class="p-4 border-b">Nhà cung cấp</th>
-                            <th class="p-4 border-b text-center">Số đơn</th>
-                            <th class="p-4 border-b text-right">Tổng giá trị</th>
-                        </tr>
-                    </thead>
-                    <tbody id="report-vendor-body"></tbody>
-                </table>
             </div>
         </section>
     </main>
@@ -187,13 +201,6 @@
                         <option value="Đã thanh toán">Đã thanh toán</option>
                     </select>
                 </div>
-                <div class="col-span-2">
-                    <label class="block text-xs font-bold text-gray-500 uppercase">Link hóa đơn (Drive)</label>
-                    <div class="flex gap-2">
-                        <input type="url" id="invoiceLink" placeholder="Dán link Drive" class="w-full border rounded p-2 text-sm">
-                        <button type="button" onclick="const url = document.getElementById('invoiceLink').value; if(url) window.open(url, '_blank')" class="bg-gray-100 p-2 rounded text-blue-600"><i class="fas fa-external-link-alt"></i></button>
-                    </div>
-                </div>
             </div>
             <table class="w-full mb-4 border border-collapse">
                 <thead class="bg-gray-100 text-xs uppercase">
@@ -211,14 +218,12 @@
             <button onclick="addRow()" class="bg-gray-100 hover:bg-gray-200 text-blue-600 px-3 py-1.5 rounded font-bold text-sm mb-4">
                 <i class="fas fa-plus mr-1"></i> Thêm dòng sản phẩm
             </button>
-            <div class="border-t pt-4 space-y-2 text-right">
-                <p class="text-sm text-gray-600">Tiền hàng: <span id="subTotalDisplay" class="font-mono">0</span>đ</p>
-                <p class="text-sm text-gray-600">Tiền thuế: <span id="taxTotalDisplay" class="font-mono">0</span>đ</p>
-                <p class="text-xl font-bold">Tổng: <span id="totalAmountDisplay" class="text-red-600 font-mono">0</span>đ</p>
+            <div class="border-t pt-4 text-right">
+                <p class="text-xl font-bold">Tổng: <span id="totalAmountDisplay" class="text-red-600">0</span>đ</p>
             </div>
             <div class="flex justify-end gap-3 mt-6">
-                <button onclick="toggleModal('modal-muahang')" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
-                <button onclick="saveInvoice()" class="px-8 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg">Lưu Đơn Hàng</button>
+                <button onclick="toggleModal('modal-muahang')" class="px-4 py-2 text-gray-500">Hủy</button>
+                <button onclick="saveInvoice()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold">Lưu Đơn Hàng</button>
             </div>
         </div>
     </div>
@@ -232,30 +237,10 @@
                     <input type="number" id="p_cost" placeholder="Giá Nhập" class="w-full border rounded p-2.5 font-mono">
                     <input type="text" id="p_unit" placeholder="Đơn vị" class="w-full border rounded p-2.5">
                 </div>
-                <input type="number" id="p_stock" value="0" placeholder="Số lượng tồn" class="w-full border rounded p-2.5">
             </div>
             <div class="flex justify-end gap-3 mt-6">
-                <button onclick="toggleModal('modal-sanpham')" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
-                <button onclick="saveProduct()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-lg font-semibold">Lưu Danh Mục</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-edit-sanpham" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-[70]">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 class="text-xl font-bold mb-4">Chỉnh sửa Sản phẩm</h3>
-            <input type="hidden" id="edit_p_key">
-            <div class="space-y-4">
-                <input type="text" id="edit_p_name" class="w-full border rounded p-2">
-                <div class="flex gap-2">
-                    <input type="text" id="edit_p_cost" class="w-full border rounded p-2 font-mono">
-                    <input type="text" id="edit_p_unit" class="w-full border rounded p-2">
-                </div>
-                <input type="number" id="edit_p_stock" class="w-full border rounded p-2">
-            </div>
-            <div class="flex justify-end gap-2 mt-6">
-                <button onclick="toggleModal('modal-edit-sanpham')" class="px-4 py-2 text-gray-500">Hủy</button>
-                <button onclick="updateProduct()" class="bg-blue-600 text-white px-6 py-2 rounded-lg">Cập nhật</button>
+                <button onclick="toggleModal('modal-sanpham')" class="px-4 py-2 text-gray-500">Hủy</button>
+                <button onclick="saveProduct()" class="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold">Lưu</button>
             </div>
         </div>
     </div>
@@ -270,27 +255,72 @@
                     <input type="text" id="ncc_phone" class="w-full border rounded-lg p-2.5" placeholder="Điện thoại">
                     <input type="text" id="ncc_bank" class="w-full border rounded-lg p-2.5" placeholder="Số tài khoản">
                 </div>
-                <input type="text" id="ncc_address" class="w-full border rounded-lg p-2.5" placeholder="Địa chỉ">
             </div>
             <div class="flex justify-end gap-3 mt-8">
-                <button onclick="toggleModal('modal-ncc')" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
-                <button onclick="saveNCC()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg">Lưu</button>
+                <button onclick="toggleModal('modal-ncc')" class="px-5 py-2 text-gray-500">Hủy</button>
+                <button onclick="saveNCC()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-luong" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-[70]">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+            <h3 id="salaryModalTitle" class="text-xl font-bold mb-4">Thông tin Chi phí Lương</h3>
+            <input type="hidden" id="edit_salary_key">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Tháng</label>
+                        <select id="s_month" class="w-full border rounded p-2">
+                            <option value="01">Tháng 01</option><option value="02">Tháng 02</option>
+                            <option value="03">Tháng 03</option><option value="04">Tháng 04</option>
+                            <option value="05">Tháng 05</option><option value="06">Tháng 06</option>
+                            <option value="07">Tháng 07</option><option value="08">Tháng 08</option>
+                            <option value="09">Tháng 09</option><option value="10">Tháng 10</option>
+                            <option value="11">Tháng 11</option><option value="12">Tháng 12</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Năm</label>
+                        <input type="number" id="s_year" value="2026" class="w-full border rounded p-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Tên nhân viên / Bộ phận</label>
+                    <input type="text" id="s_staff" placeholder="Nhập tên hoặc nội dung chi lương" class="w-full border rounded p-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Ghi chú</label>
+                    <textarea id="s_note" rows="2" placeholder="Ghi chú thêm về khoản lương này..." class="w-full border rounded p-2 text-sm"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Tổng số tiền</label>
+                    <input type="number" id="s_amount" placeholder="0" class="w-full border rounded p-2 font-mono text-blue-600 font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Trạng thái thanh toán</label>
+                    <select id="s_status" class="w-full border rounded p-2">
+                        <option value="Chưa thanh toán">Chưa thanh toán</option>
+                        <option value="Đã thanh toán">Đã thanh toán</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-8">
+                <button onclick="toggleModal('modal-luong')" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
+                <button onclick="saveSalary()" class="px-8 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-lg">Lưu phiếu lương</button>
             </div>
         </div>
     </div>
 
     <script type="module" src="app.js"></script>
     <script>
-        // Hàm Global cho UI
         function toggleModal(id) {
             const modal = document.getElementById(id);
             if (modal) modal.classList.toggle('hidden');
         }
 
         function switchTab(tab) {
-            // Danh sách các tab bao gồm cả 'baocao'
-            const sections = ['muahang', 'sanpham', 'ncc', 'baocao'];
-            
+            const sections = ['muahang', 'sanpham', 'ncc', 'baocao', 'luong'];
             sections.forEach(s => {
                 const element = document.getElementById('section-' + s);
                 const button = document.getElementById('btn-' + s);
@@ -308,6 +338,15 @@
                 activeBtn.classList.add('active-tab', 'text-blue-600');
                 activeBtn.classList.remove('text-gray-500');
             }
+        }
+
+        function openSalaryModal() {
+            document.getElementById('edit_salary_key').value = '';
+            document.getElementById('s_staff').value = '';
+            document.getElementById('s_amount').value = '';
+            document.getElementById('s_note').value = '';
+            document.getElementById('salaryModalTitle').innerText = 'Thêm phiếu lương mới';
+            toggleModal('modal-luong');
         }
     </script>
 </body>
