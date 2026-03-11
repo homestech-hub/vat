@@ -16,7 +16,6 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 let availableProducts = [];
-// Biến lưu trữ dữ liệu gốc để phục vụ việc lọc ở Tab Báo cáo
 let originalInvoicesData = {};
 
 // --- HÀM TRỢ GIÚP ĐỊNH DẠNG ---
@@ -142,11 +141,10 @@ window.saveProduct = async () => {
     window.toggleModal('modal-sanpham');
 };
 
-// --- HÀM CẬP NHẬT BÁO CÁO (ĐÃ BỔ SUNG LOGIC LỌC TÌM KIẾM CHO TAB BÁO CÁO) ---
+// --- HÀM CẬP NHẬT BÁO CÁO ---
 function updateGeneralReport(invoicesData) {
     originalInvoicesData = invoicesData; 
     
-    // Cập nhật danh sách NCC vào ô lọc của Báo cáo
     const vendorSelectFilter = document.getElementById('reportVendorFilter');
     if (vendorSelectFilter) {
         const currentVal = vendorSelectFilter.value;
@@ -157,7 +155,6 @@ function updateGeneralReport(invoicesData) {
         });
     }
 
-    // Luôn áp dụng bộ lọc báo cáo mỗi khi dữ liệu thay đổi
     applyReportFilter();
 }
 
@@ -169,7 +166,6 @@ window.applyReportFilter = () => {
     let totalChi = 0, totalDon = 0, totalNo = 0;
     let vendorSummary = {};
 
-    // Hàm phụ chuyển DD/MM/YYYY sang YYYY-MM-DD
     const toIso = (str) => {
         if (!str || !str.includes('/')) return str;
         const p = str.split('/'); return `${p[2]}-${p[1]}-${p[0]}`;
@@ -177,7 +173,6 @@ window.applyReportFilter = () => {
 
     Object.entries(originalInvoicesData).forEach(([key, d]) => {
         const invoiceDateIso = toIso(d.NgayNhap);
-        
         const matchFrom = !fromDate || invoiceDateIso >= fromDate;
         const matchTo = !toDate || invoiceDateIso <= toDate;
         const matchVendor = !selectedVendor || d.NhaCungCap === selectedVendor;
@@ -186,7 +181,11 @@ window.applyReportFilter = () => {
             const amount = parseInt(d.ThanhTien) || 0;
             totalChi += amount;
             totalDon++;
-            if (d.HinhThucThanhToan === "Công Nợ") totalNo += amount;
+            
+            // Cập nhật logic lọc công nợ báo cáo
+            if (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") {
+                totalNo += amount;
+            }
 
             const vName = d.NhaCungCap || "Chưa rõ";
             if (!vendorSummary[vName]) {
@@ -200,7 +199,6 @@ window.applyReportFilter = () => {
         }
     });
 
-    // Cập nhật giao diện Tab Báo cáo
     if (document.getElementById('report-total-amount')) document.getElementById('report-total-amount').innerText = totalChi.toLocaleString('vi-VN') + "đ";
     if (document.getElementById('report-total-invoices')) document.getElementById('report-total-invoices').innerText = totalDon;
     if (document.getElementById('report-unpaid-amount')) document.getElementById('report-unpaid-amount').innerText = totalNo.toLocaleString('vi-VN') + "đ";
@@ -251,93 +249,106 @@ function initApp() {
         }
     });
 
+    const parseDate = (dateStr) => {
+        if (!dateStr) return 0;
+        const parts = dateStr.split('/');
+        if (parts.length === 3) return parseInt(parts[2] + parts[1] + parts[0]); 
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+
+    // 3. LẮNG NGHE HÓA ĐƠN NHẬP
     onValue(ref(db, 'invoices'), (snapshot) => {
         const invTbody = document.getElementById('invoiceTableBody'); 
         if (!invTbody) return;
         invTbody.innerHTML = "";
-        
         if (snapshot.exists()) {
             const data = snapshot.val(); 
             updateGeneralReport(data);
-            
             const invoiceArray = Object.entries(data);
-
-            const parseDate = (dateStr) => {
-                if (!dateStr) return 0;
-                const parts = dateStr.split('/');
-                if (parts.length === 3) {
-                    return parseInt(parts[2] + parts[1] + parts[0]); 
-                }
-                const d = new Date(dateStr);
-                return isNaN(d.getTime()) ? 0 : d.getTime();
-            };
-
             invoiceArray.sort((a, b) => parseDate(b[1].NgayNhap) - parseDate(a[1].NgayNhap));
-            
             invoiceArray.forEach(([key, d]) => {
+                // SỬA LOGIC THANH TOÁN KHỚP FIREBASE
+                let rawStatus = d.HinhThucThanhToan || "";
                 let payLabel = "";
                 let payColor = "";
                 
-                if (d.HinhThucThanhToan === "Công Nợ") {
-                    payLabel = "Chưa thanh toán";
-                    payColor = "bg-red-100 text-red-700";
-                } else if (d.HinhThucThanhToan === "Tiền Mặt" || d.HinhThucThanhToan === "Chuyển Khoản") {
-                    payLabel = "Đã thanh toán";
-                    payColor = "bg-green-100 text-green-700";
+                if (rawStatus === "Công Nợ" || rawStatus === "Chưa thanh toán") {
+                    payLabel = "Chưa thanh toán"; payColor = "bg-red-100 text-red-700";
+                } else if (rawStatus === "Tiền Mặt" || rawStatus === "Chuyển Khoản" || rawStatus === "Đã thanh toán") {
+                    payLabel = "Đã thanh toán"; payColor = "bg-green-100 text-green-700";
                 } else {
-                    payLabel = d.HinhThucThanhToan || "N/A";
-                    payColor = "bg-gray-100 text-gray-700";
+                    payLabel = rawStatus || "N/A"; payColor = "bg-gray-100 text-gray-700";
                 }
-                
-                let driveLink = "";
-                if (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') driveLink = d.LinkHoaDon.Url;
-                else if (typeof d.LinkHoaDon === 'string') driveLink = d.LinkHoaDon;
-                const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
 
-                invTbody.innerHTML += `
+                let driveLink = (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') ? d.LinkHoaDon.Url : d.LinkHoaDon;
+                const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
+                
+                invTbody.innerHTML += `<tr class="border-b text-sm hover:bg-gray-50"><td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td><td class="p-4 align-top"><div class="font-bold text-gray-800 flex items-center gap-1">${d.NhaCungCap || ''} ${driveIcon}</div><div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit"><i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}</div></td><td class="p-4 text-xs text-gray-600 align-top"><div class="flex flex-col gap-1.5">${(d.ChiTiet || []).map((i, idx) => `<div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2"><span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span><div class="flex flex-col"><span class="font-medium">${i.MaSP}</span><span class="text-[10px] text-blue-500 font-bold text-left">SL: ${i.SoLuong}</span></div></div>`).join('')}</div></td><td class="p-4 font-mono font-bold text-red-600 text-right align-top">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</td><td class="p-4 text-center align-top"><span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">${d.TinhTrangHoaDon || 'Chưa nhận'}</span></td><td class="p-4 text-center align-top"><span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${payLabel}</span></td><td class="p-4 text-center align-top"><button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button></td></tr>`;
+            });
+            if (typeof window.filterInvoices === 'function') window.filterInvoices();
+        }
+    });
+
+    // --- LẮNG NGHE DỮ LIỆU BÁN HÀNG (FIXED LOGIC THANH TOÁN & LINK DRIVE) ---
+    onValue(ref(db, 'sales'), (snapshot) => {
+        const salesTbody = document.getElementById('salesTableBody');
+        if (!salesTbody) return;
+        salesTbody.innerHTML = "";
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const salesArray = Object.entries(data);
+            salesArray.sort((a, b) => parseDate(b[1].NgayBan) - parseDate(a[1].NgayBan));
+            
+            salesArray.forEach(([key, d]) => {
+                // SỬA LOGIC THANH TOÁN KHỚP FIREBASE
+                let rawStatus = d.HinhThucThanhToan || "";
+                let payLabel = "";
+                let payColor = "";
+                
+                if (rawStatus === "Công Nợ" || rawStatus === "Chưa thanh toán") {
+                    payLabel = "Chưa thanh toán"; payColor = "bg-red-100 text-red-700";
+                } else {
+                    payLabel = "Đã thanh toán"; payColor = "bg-green-100 text-green-700";
+                }
+
+                // XỬ LÝ LINK HOA DON DANG JSON {"Url":"","LinkText":""}
+                let driveIcon = "";
+                try {
+                    let driveData = d.LinkHoaDon;
+                    if (typeof driveData === 'string' && driveData.startsWith('{')) driveData = JSON.parse(driveData);
+                    if (driveData && driveData.Url) {
+                        driveIcon = `<a href="${driveData.Url}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive text-[10px]"></i></a>`;
+                    } else if (typeof driveData === 'string' && driveData.startsWith('http')) {
+                        driveIcon = `<a href="${driveData}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive text-[10px]"></i></a>`;
+                    }
+                } catch (e) { driveIcon = ""; }
+
+                salesTbody.innerHTML += `
                     <tr class="border-b text-sm hover:bg-gray-50">
-                        <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
+                        <td class="p-4 text-gray-600 align-top">${d.NgayBan || ''}</td>
                         <td class="p-4 align-top">
-                            <div class="font-bold text-gray-800 flex items-center gap-1">${d.NhaCungCap || ''} ${driveIcon}</div>
-                            <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
-                                <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
-                            </div>
+                            <div class="font-bold text-gray-800 flex items-center gap-1">${d.KhachHang || ''} ${driveIcon}</div>
+                            <div class="text-[11px] text-green-600 mt-1 font-medium bg-green-50 px-1.5 py-0.5 rounded w-fit"><i class="fas fa-file-invoice text-[9px]"></i> ${d.SoHoaDon || 'N/A'}</div>
                         </td>
                         <td class="p-4 text-xs text-gray-600 align-top">
                             <div class="flex flex-col gap-1.5">
-                                ${(d.ChiTiet || []).map((i, idx) => `
-                                    <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
-                                        <span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span>
-                                        <div class="flex flex-col">
-                                            <span class="font-medium">${i.MaSP}</span>
-                                            <span class="text-[10px] text-blue-500 font-bold text-left">SL: ${i.SoLuong}</span>
-                                        </div>
-                                    </div>
-                                `).join('')}
+                                ${(d.ChiTiet || []).map((i, idx) => `<div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2"><span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span><div class="flex flex-col"><span class="font-medium">${i.MaSP}</span><span class="text-[10px] text-blue-500 font-bold">SL: ${i.SoLuong}</span></div></div>`).join('')}
                             </div>
                         </td>
-                        <td class="p-4 font-mono font-bold text-red-600 text-right align-top">
-                            ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
+                        <td class="p-4 font-mono font-bold text-blue-600 text-right align-top">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</td>
+                        <td class="p-4 text-center align-top">
+                            <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">${d.TinhTrangHoaDon || 'N/A'}</span>
                         </td>
                         <td class="p-4 text-center align-top">
-                            <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">
-                                ${d.TinhTrangHoaDon || 'Chưa nhận'}
-                            </span>
+                            <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${payLabel}</span>
                         </td>
                         <td class="p-4 text-center align-top">
-                            <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
-                                ${payLabel}
-                            </span>
-                        </td>
-                        <td class="p-4 text-center align-top">
-                            <button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <button onclick="remove(ref(db, 'sales/${key}'))" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>`;
             });
-            
-            if (typeof window.filterInvoices === 'function') window.filterInvoices();
+            if (typeof window.filterSales === 'function') window.filterSales();
         }
     });
 
@@ -348,18 +359,7 @@ function initApp() {
         if (snapshot.exists()) {
             Object.entries(snapshot.val()).reverse().forEach(([key, s]) => {
                 const statusColor = s.status === "Đã thanh toán" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
-                salaryTbody.innerHTML += `
-                    <tr class="border-b text-sm hover:bg-gray-50">
-                        <td class="p-4 font-medium">${s.month}/${s.year}</td>
-                        <td class="p-4 font-bold text-gray-800">${s.staff}</td>
-                        <td class="p-4 text-xs text-gray-500 max-w-[200px] truncate">${s.note || ''}</td>
-                        <td class="p-4 text-right font-mono font-bold text-blue-600">${(s.amount || 0).toLocaleString()}đ</td>
-                        <td class="p-4 text-center"><span class="${statusColor} px-2 py-1 rounded text-xs font-bold">${s.status}</span></td>
-                        <td class="p-4 text-center">
-                            <button onclick="editSalary('${key}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button>
-                            <button onclick="remove(ref(db, 'salaries/${key}'))" class="text-red-600"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>`;
+                salaryTbody.innerHTML += `<tr class="border-b text-sm hover:bg-gray-50"><td class="p-4 font-medium">${s.month}/${s.year}</td><td class="p-4 font-bold text-gray-800">${s.staff}</td><td class="p-4 text-xs text-gray-500 max-w-[200px] truncate">${s.note || ''}</td><td class="p-4 text-right font-mono font-bold text-blue-600">${(s.amount || 0).toLocaleString()}đ</td><td class="p-4 text-center"><span class="${statusColor} px-2 py-1 rounded text-xs font-bold">${s.status}</span></td><td class="p-4 text-center"><button onclick="editSalary('${key}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button><button onclick="remove(ref(db, 'salaries/${key}'))" class="text-red-600"><i class="fas fa-trash"></i></button></td></tr>`;
             });
         }
     });
@@ -367,25 +367,21 @@ function initApp() {
 
 initApp();
 
-// --- LOGIC LỌC TÌM KIẾM ĐA NĂNG ---
+// --- LOGIC LỌC TÌM KIẾM ĐA NĂNG (MUA HÀNG) ---
 window.filterInvoices = () => {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const filterDate = document.getElementById('filterDate').value; 
     const rows = document.querySelectorAll('#invoiceTableBody tr');
-
     rows.forEach(row => {
         const text = row.innerText.toLowerCase();
         const dateCell = row.querySelector('td:first-child').innerText; 
-        
         let rowDateIso = "";
         if (dateCell.includes('/')) {
             const parts = dateCell.split('/');
             rowDateIso = `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
-
         const matchesSearch = text.includes(searchTerm);
         const matchesDate = !filterDate || rowDateIso === filterDate;
-
         row.style.display = (matchesSearch && matchesDate) ? "" : "none";
     });
 };
@@ -394,4 +390,29 @@ window.resetFilter = () => {
     document.getElementById('searchInput').value = "";
     document.getElementById('filterDate').value = "";
     window.filterInvoices();
+};
+
+// --- LOGIC LỌC TÌM KIẾM ĐA NĂNG (BÁN HÀNG) ---
+window.filterSales = () => {
+    const searchTerm = document.getElementById('searchBanHang').value.toLowerCase();
+    const filterDate = document.getElementById('filterDateSale').value;
+    const rows = document.querySelectorAll('#salesTableBody tr');
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        const dateCell = row.querySelector('td:first-child').innerText;
+        let rowDateIso = "";
+        if (dateCell.includes('/')) {
+            const parts = dateCell.split('/');
+            rowDateIso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        const matchesSearch = text.includes(searchTerm);
+        const matchesDate = !filterDate || rowDateIso === filterDate;
+        row.style.display = (matchesSearch && matchesDate) ? "" : "none";
+    });
+};
+
+window.resetFilterSale = () => {
+    document.getElementById('searchBanHang').value = "";
+    document.getElementById('filterDateSale').value = "";
+    window.filterSales();
 };
