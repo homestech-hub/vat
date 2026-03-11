@@ -68,9 +68,9 @@
                                 <th class="p-4 font-semibold border-b">Ngày nhập</th>
                                 <th class="p-4 font-semibold border-b">Nhà cung cấp</th>
                                 <th class="p-4 font-semibold border-b">Nội dung (SP)</th>
-                                <th class="p-4 font-semibold border-b">Số tiền</th>
-                                <th class="p-4 font-semibold border-b text-center">Thanh Toán</th>
+                                <th class="p-4 font-semibold border-b text-right">Số tiền</th>
                                 <th class="p-4 font-semibold border-b text-center">Tình trạng HĐ</th>
+                                <th class="p-4 font-semibold border-b text-center">Thanh toán</th>
                                 <th class="p-4 font-semibold border-b text-center">Thao tác</th>
                             </tr>
                         </thead>
@@ -169,6 +169,26 @@
                     <h2 id="report-unpaid-amount" class="text-2xl font-black text-red-600">0đ</h2>
                 </div>
             </div>
+
+            <div class="bg-white rounded-xl shadow-md overflow-hidden border">
+                <div class="p-4 bg-gray-50 border-b font-bold text-gray-700 uppercase text-sm">
+                    Chi tiết theo Nhà cung cấp & Tình trạng hóa đơn
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-100 text-xs uppercase text-gray-600">
+                            <tr>
+                                <th class="p-4 border-b">Nhà cung cấp</th>
+                                <th class="p-4 border-b text-center">Số đơn hàng</th>
+                                <th class="p-4 border-b text-right">Tổng giá trị</th>
+                                <th class="p-4 border-b text-center">Tình trạng chứng từ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-vendor-body" class="text-sm text-gray-700">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
         </section>
     </main>
 
@@ -223,7 +243,7 @@
             </div>
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="toggleModal('modal-muahang')" class="px-4 py-2 text-gray-500">Hủy</button>
-                <button onclick="saveInvoice()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold">Lưu Đơn Hàng</button>
+                <button onclick="saveInvoice()" class="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg">Lưu Đơn Hàng</button>
             </div>
         </div>
     </div>
@@ -351,4 +371,3 @@
     </script>
 </body>
 </html>
-
