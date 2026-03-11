@@ -200,8 +200,7 @@ function initApp() {
     });
 
     // 3. Lắng nghe Hóa đơn (Cập nhật hiển thị mỗi SP một dòng)
-    // --- LẮNG NGHE HÓA ĐƠN (BẢN FIX TRIỆT ĐỂ LỆCH CỘT) ---
-onValue(ref(db, 'invoices'), (snapshot) => {
+    onValue(ref(db, 'invoices'), (snapshot) => {
     const invTbody = document.getElementById('invoiceTableBody'); 
     if (!invTbody) return;
     invTbody.innerHTML = "";
@@ -210,7 +209,17 @@ onValue(ref(db, 'invoices'), (snapshot) => {
         const data = snapshot.val(); 
         updateGeneralReport(data);
         
-        Object.entries(data).reverse().forEach(([key, d]) => {
+        // --- BƯỚC SẮP XẾP: Chuyển sang mảng và sắp xếp theo ngày gần nhất ---
+        const sortedInvoices = Object.entries(data).sort((a, b) => {
+            // Chuyển đổi chuỗi ngày (NgayNhap) thành đối tượng Date để so sánh
+            // Nếu NgayNhap trống, mặc định là năm 1970 để đẩy xuống cuối
+            const dateA = new Date(a[1].NgayNhap || '1970-01-01');
+            const dateB = new Date(b[1].NgayNhap || '1970-01-01');
+            return dateB - dateA; // Ngày lớn hơn (gần hơn) sẽ đứng trước
+        });
+        
+        // Sử dụng danh sách đã sắp xếp để hiển thị
+        sortedInvoices.forEach(([key, d]) => {
             // 1. Xử lý màu sắc Thanh toán
             const isPaid = (d.HinhThucThanhToan === "Đã thanh toán" || d.HinhThucThanhToan === "Tiền Mặt");
             const payColor = isPaid ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700";
@@ -298,3 +307,4 @@ onValue(ref(db, 'invoices'), (snapshot) => {
 }
 
 initApp();
+
