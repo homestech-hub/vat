@@ -30,7 +30,7 @@
                 <i class="fas fa-search text-xs"></i>
             </span>
             <input type="text" id="mobileSearchInput" onkeyup="handleMobileFilter()" 
-                placeholder="Tìm NCC, số phiếu, sản phẩm..." 
+                placeholder="Tìm kiếm thông tin..." 
                 class="w-full pl-9 pr-4 py-2 bg-transparent text-sm focus:outline-none">
         </div>
         
@@ -43,7 +43,7 @@
                 <span class="text-[9px] font-bold text-gray-400 uppercase">Đến</span>
                 <input type="date" id="mobileToDate" onchange="handleMobileFilter()" class="bg-transparent text-xs w-full focus:outline-none">
             </div>
-            <button onclick="resetMobileFilter()" class="p-2 text-gray-400 hover:text-red-500"><i class="fas fa-undo-alt text-xs"></i></button>
+            <button onclick="resetMobileFilter()" class="p-2 text-gray-400 hover:text-red-500 transition-colors"><i class="fas fa-undo-alt text-xs"></i></button>
         </div>
     </div>
 
@@ -55,19 +55,22 @@
         </div>
     </div>
 
-    <button onclick="window.location.href='index.html'" class="fixed bottom-24 right-6 bg-blue-600 text-white w-12 h-12 rounded-full shadow-2xl flex items-center justify-center text-lg z-40">
+    <button onclick="window.location.href='index.html'" class="fixed bottom-24 right-6 bg-blue-600 text-white w-12 h-12 rounded-full shadow-2xl flex items-center justify-center text-lg z-40 active:scale-95 transition-transform">
         <i class="fas fa-desktop"></i>
     </button>
 
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-50">
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <button onclick="renderMobileView('muahang')" id="nav-muahang" class="bottom-nav-item active flex flex-col items-center flex-1">
-            <i class="fas fa-shopping-cart text-xl"></i><span class="text-[10px] mt-1">Mua hàng</span>
+            <i class="fas fa-shopping-cart text-xl"></i><span class="text-[10px] mt-1 font-medium">Mua hàng</span>
+        </button>
+        <button onclick="renderMobileView('banhang')" id="nav-banhang" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
+            <i class="fas fa-hand-holding-usd text-xl"></i><span class="text-[10px] mt-1 font-medium">Bán hàng</span>
         </button>
         <button onclick="renderMobileView('sanpham')" id="nav-sanpham" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
-            <i class="fas fa-box text-xl"></i><span class="text-[10px] mt-1">Sản phẩm</span>
+            <i class="fas fa-box text-xl"></i><span class="text-[10px] mt-1 font-medium">Sản phẩm</span>
         </button>
         <button onclick="renderMobileView('baocao')" id="nav-baocao" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
-            <i class="fas fa-chart-pie text-xl"></i><span class="text-[10px] mt-1">Báo cáo</span>
+            <i class="fas fa-chart-pie text-xl"></i><span class="text-[10px] mt-1 font-medium">Báo cáo</span>
         </button>
     </nav>
 
@@ -88,10 +91,10 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        let fullData = []; 
+        let muahangData = [];
+        let banhangData = [];
         let currentTab = 'muahang';
 
-        // --- CHUYỂN ĐỔI NGÀY ĐỂ SO SÁNH ---
         const toIsoDate = (str) => {
             if (!str || !str.includes('/')) return str;
             const p = str.split('/'); return `${p[2]}-${p[1]}-${p[0]}`;
@@ -106,44 +109,99 @@
             
             const listContainer = document.getElementById('mobile-list');
             const searchBar = document.getElementById('search-container');
-            searchBar.style.display = (type === 'muahang') ? 'block' : 'none';
+            const viewTitle = document.getElementById('current-view-title');
 
-            if (type === 'muahang') fetchMuaHang(listContainer);
-            else if (type === 'sanpham') fetchSanPham(listContainer);
-            else if (type === 'baocao') fetchBaoCao(listContainer);
+            // Ẩn hiện bộ lọc
+            searchBar.style.display = (type === 'muahang' || type === 'banhang') ? 'block' : 'none';
+
+            if (type === 'muahang') {
+                viewTitle.innerText = "Danh sách Mua hàng";
+                fetchData('invoices', 'muahang');
+            } else if (type === 'banhang') {
+                viewTitle.innerText = "Danh sách Bán hàng";
+                fetchData('sales', 'banhang');
+            } else if (type === 'sanpham') {
+                viewTitle.innerText = "Danh mục Sản phẩm";
+                fetchSanPham(listContainer);
+            } else if (type === 'baocao') {
+                viewTitle.innerText = "Báo cáo nhanh";
+                fetchBaoCao(listContainer);
+            }
         };
 
-        function fetchMuaHang(container) {
-            onValue(ref(db, 'invoices'), (snapshot) => {
-                if (!snapshot.exists()) { container.innerHTML = `<p class="text-center mt-10">Trống</p>`; return; }
-                fullData = Object.entries(snapshot.val()).sort((a, b) => parseDateInt(b[1].NgayNhap) - parseDateInt(a[1].NgayNhap));
-                handleMobileFilter(); // Áp dụng lọc ngay khi tải dữ liệu
+        function fetchData(node, type) {
+            onValue(ref(db, node), (snapshot) => {
+                const listContainer = document.getElementById('mobile-list');
+                if (!snapshot.exists()) { listContainer.innerHTML = `<p class="text-center mt-10 text-gray-400">Trống</p>`; return; }
+                
+                const dataArray = Object.entries(snapshot.val()).sort((a, b) => {
+                    const dateA = a[1].NgayNhap || a[1].NgayBan;
+                    const dateB = b[1].NgayNhap || b[1].NgayBan;
+                    return parseDateInt(dateB) - parseDateInt(dateA);
+                });
+
+                if (type === 'muahang') muahangData = dataArray;
+                else banhangData = dataArray;
+
+                handleMobileFilter();
             });
         }
 
-        // --- LOGIC LỌC ĐA NĂNG (TÌM KIẾM + NGÀY THÁNG) ---
         window.handleMobileFilter = () => {
-            if (currentTab !== 'muahang') return;
-
             const query = document.getElementById('mobileSearchInput').value.toLowerCase();
             const fromDate = document.getElementById('mobileFromDate').value;
             const toDate = document.getElementById('mobileToDate').value;
             const container = document.getElementById('mobile-list');
 
-            const filtered = fullData.filter(([key, d]) => {
-                const dateIso = toIsoDate(d.NgayNhap);
-                const matchSearch = (d.NhaCungCap || "").toLowerCase().includes(query) || 
-                                    (d.SoPhieuNhap || "").toLowerCase().includes(query) ||
-                                    (d.ChiTiet || []).some(i => (i.MaSP || "").toLowerCase().includes(query));
+            const sourceData = (currentTab === 'muahang') ? muahangData : banhangData;
+
+            const filtered = sourceData.filter(([key, d]) => {
+                const dateIso = toIsoDate(d.NgayNhap || d.NgayBan);
+                const name = (d.NhaCungCap || d.KhachHang || "").toLowerCase();
+                const idPhieu = (d.SoPhieuNhap || d.SoHoaDon || "").toLowerCase();
+                const hasProduct = (d.ChiTiet || []).some(i => (i.MaSP || "").toLowerCase().includes(query));
                 
+                const matchSearch = name.includes(query) || idPhieu.includes(query) || hasProduct;
                 const matchFrom = !fromDate || dateIso >= fromDate;
                 const matchTo = !toDate || dateIso <= toDate;
 
                 return matchSearch && matchFrom && matchTo;
             });
 
-            displayMuaHang(filtered, container);
+            renderList(filtered, container, currentTab);
         };
+
+        function renderList(items, container, type) {
+            if (items.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không tìm thấy kết quả</p>`; return; }
+            
+            container.innerHTML = items.map(([key, d]) => {
+                const isDebt = (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán");
+                const payLabel = isDebt ? "Chưa thanh toán" : "Đã thanh toán";
+                const payColor = isDebt ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600";
+                const date = d.NgayNhap || d.NgayBan;
+                const mainName = d.NhaCungCap || d.KhachHang;
+                const subId = d.SoPhieuNhap || d.SoHoaDon;
+
+                return `
+                    <div class="bg-white p-4 rounded-2xl border border-gray-100 card-shadow">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="font-bold text-gray-800 text-sm leading-tight">${mainName}</h3>
+                                <p class="text-[10px] text-blue-600 mt-0.5"><i class="fas fa-hashtag text-[8px]"></i> ${subId || 'N/A'}</p>
+                            </div>
+                            <span class="text-[10px] font-bold text-gray-400">${date}</span>
+                        </div>
+                        <div class="space-y-1.5 mb-3">
+                            ${(d.ChiTiet || []).map(i => `<div class="flex justify-between text-xs bg-gray-50 p-2 rounded-lg"><span>${i.MaSP}</span><span class="font-bold text-blue-600">x${i.SoLuong}</span></div>`).join('')}
+                        </div>
+                        <div class="flex justify-between items-end pt-2 border-t border-dashed border-gray-100">
+                            <div><p class="text-[9px] text-gray-400 font-bold uppercase">Tổng tiền</p><p class="text-base font-black ${type==='muahang'?'text-red-600':'text-blue-600'} font-mono">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</p></div>
+                            <div class="text-right"><span class="${payColor} px-2 py-0.5 rounded text-[9px] font-black uppercase">${payLabel}</span></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
 
         window.resetMobileFilter = () => {
             document.getElementById('mobileSearchInput').value = "";
@@ -152,49 +210,44 @@
             window.handleMobileFilter();
         };
 
-        function displayMuaHang(items, container) {
-            if (items.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không tìm thấy kết quả</p>`; return; }
-            container.innerHTML = items.map(([key, d]) => {
-                let payLabel = (d.HinhThucThanhToan === "Công Nợ") ? "Chưa thanh toán" : "Đã thanh toán";
-                let payColor = (d.HinhThucThanhToan === "Công Nợ") ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600";
-                return `
-                    <div class="bg-white p-4 rounded-2xl border border-gray-100 card-shadow">
-                        <div class="flex justify-between items-start mb-3">
-                            <div>
-                                <h3 class="font-bold text-gray-800 text-sm">${d.NhaCungCap}</h3>
-                                <p class="text-[10px] text-blue-600 mt-0.5"><i class="fas fa-hashtag text-[8px]"></i> ${d.SoPhieuNhap || 'N/A'}</p>
-                            </div>
-                            <span class="text-[10px] font-bold text-gray-400">${d.NgayNhap}</span>
-                        </div>
-                        <div class="space-y-1.5 mb-3">
-                            ${(d.ChiTiet || []).map(i => `<div class="flex justify-between text-xs bg-gray-50 p-2 rounded-lg"><span>${i.MaSP}</span><span class="font-bold text-blue-600">x${i.SoLuong}</span></div>`).join('')}
-                        </div>
-                        <div class="flex justify-between items-end pt-2 border-t border-dashed border-gray-100">
-                            <div><p class="text-[9px] text-gray-400 font-bold uppercase">Tổng tiền</p><p class="text-base font-black text-red-600 font-mono">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</p></div>
-                            <div class="text-right"><span class="${payColor} px-2 py-0.5 rounded text-[9px] font-black uppercase">${payLabel}</span></div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // ... (Các hàm fetchSanPham và fetchBaoCao giữ nguyên như bản trước) ...
         function fetchSanPham(container) {
             onValue(ref(db, 'products'), (snapshot) => {
                 const prods = snapshot.exists() ? Object.values(snapshot.val()) : [];
-                container.innerHTML = prods.map(p => `<div class="bg-white p-4 rounded-2xl flex items-center gap-4 card-shadow border border-gray-100"><div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">${p.code ? p.code.substring(0,3) : 'SP'}</div><div class="flex-1"><h4 class="font-bold text-gray-800 text-sm">${p.name}</h4><p class="text-[10px] text-gray-400">${p.code}</p></div><div class="text-right"><p class="text-blue-600 font-bold text-sm">${(p.cost || 0).toLocaleString()}đ</p></div></div>`).join('');
+                container.innerHTML = prods.map(p => `<div class="bg-white p-4 rounded-2xl flex items-center gap-4 card-shadow border border-gray-100"><div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">SP</div><div class="flex-1"><h4 class="font-bold text-gray-800 text-sm">${p.name}</h4><p class="text-[10px] text-gray-400">${p.code}</p></div><div class="text-right"><p class="text-blue-600 font-bold text-sm">${(p.cost || 0).toLocaleString()}đ</p></div></div>`).join('');
             });
         }
 
         function fetchBaoCao(container) {
-            onValue(ref(db, 'invoices'), (snapshot) => {
-                const data = snapshot.val() || {};
-                let total = 0, debt = 0;
-                Object.values(data).forEach(d => {
-                    const amount = Number(d.ThanhTien) || 0;
-                    total += amount; if (d.HinhThucThanhToan === "Công Nợ") debt += amount;
+            onValue(ref(db, 'invoices'), (invSnap) => {
+                onValue(ref(db, 'sales'), (saleSnap) => {
+                    let totalIn = 0, totalOut = 0, debtIn = 0, debtOut = 0;
+                    
+                    if(invSnap.exists()) Object.values(invSnap.val()).forEach(d => {
+                        const amt = Number(d.ThanhTien) || 0; totalIn += amt;
+                        if(d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") debtIn += amt;
+                    });
+                    
+                    if(saleSnap.exists()) Object.values(saleSnap.val()).forEach(d => {
+                        const amt = Number(d.ThanhTien) || 0; totalOut += amt;
+                        if(d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") debtOut += amt;
+                    });
+
+                    container.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-lg">
+                                <p class="text-xs opacity-80 uppercase font-bold mb-1">Doanh thu bán hàng</p>
+                                <h2 class="text-2xl font-black">${totalOut.toLocaleString()}đ</h2>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                                <div class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center"><i class="fas fa-arrow-down"></i></div>
+                                <div><p class="text-xs text-gray-400 font-bold uppercase">Tổng chi nhập hàng</p><p class="text-lg font-black text-gray-800">${totalIn.toLocaleString()}đ</p></div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                                <div class="w-10 h-10 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center"><i class="fas fa-exclamation-triangle"></i></div>
+                                <div><p class="text-xs text-gray-400 font-bold uppercase">Công nợ khách hàng</p><p class="text-lg font-black text-orange-600">${debtOut.toLocaleString()}đ</p></div>
+                            </div>
+                        </div>`;
                 });
-                container.innerHTML = `<div class="space-y-4"><div class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-lg"><p class="text-xs opacity-80 uppercase font-bold mb-1">Tổng nhập hàng</p><h2 class="text-2xl font-black">${total.toLocaleString()}đ</h2></div><div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4"><div class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center"><i class="fas fa-exclamation-circle"></i></div><div><p class="text-xs text-gray-400 font-bold uppercase">Công nợ hiện tại</p><p class="text-xl font-black text-red-600">${debt.toLocaleString()}đ</p></div></div></div>`;
             });
         }
 
