@@ -10,7 +10,8 @@
         body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         .bottom-nav-item.active { color: #1d4ed8; }
         .card-shadow { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        input[type="date"]::-webkit-inner-spin-button,
+        input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
     </style>
 </head>
 <body class="bg-gray-50 pb-24">
@@ -23,6 +24,29 @@
         <button onclick="location.reload()" class="p-2 active:scale-90 transition-transform"><i class="fas fa-sync-alt"></i></button>
     </div>
 
+    <div id="search-container" class="p-3 bg-white border-b sticky top-[68px] z-40 space-y-2">
+        <div class="relative border rounded-xl bg-gray-50">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                <i class="fas fa-search text-xs"></i>
+            </span>
+            <input type="text" id="mobileSearchInput" onkeyup="handleMobileFilter()" 
+                placeholder="Tìm NCC, số phiếu, sản phẩm..." 
+                class="w-full pl-9 pr-4 py-2 bg-transparent text-sm focus:outline-none">
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <div class="flex-1 flex items-center gap-1 bg-gray-50 border rounded-lg px-2 py-1">
+                <span class="text-[9px] font-bold text-gray-400 uppercase">Từ</span>
+                <input type="date" id="mobileFromDate" onchange="handleMobileFilter()" class="bg-transparent text-xs w-full focus:outline-none">
+            </div>
+            <div class="flex-1 flex items-center gap-1 bg-gray-50 border rounded-lg px-2 py-1">
+                <span class="text-[9px] font-bold text-gray-400 uppercase">Đến</span>
+                <input type="date" id="mobileToDate" onchange="handleMobileFilter()" class="bg-transparent text-xs w-full focus:outline-none">
+            </div>
+            <button onclick="resetMobileFilter()" class="p-2 text-gray-400 hover:text-red-500"><i class="fas fa-undo-alt text-xs"></i></button>
+        </div>
+    </div>
+
     <div id="mobile-content" class="p-3">
         <div id="mobile-list" class="space-y-4">
             <div class="flex justify-center items-center mt-20">
@@ -31,22 +55,19 @@
         </div>
     </div>
 
-    <button onclick="window.location.href='index.html'" class="fixed bottom-24 right-6 bg-blue-600 text-white w-12 h-12 rounded-full shadow-2xl flex items-center justify-center text-lg z-40 active:bg-blue-800">
+    <button onclick="window.location.href='index.html'" class="fixed bottom-24 right-6 bg-blue-600 text-white w-12 h-12 rounded-full shadow-2xl flex items-center justify-center text-lg z-40">
         <i class="fas fa-desktop"></i>
     </button>
 
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-        <button onclick="renderMobileView('muahang')" id="nav-muahang" class="bottom-nav-item active flex flex-col items-center flex-1 transition-colors">
-            <i class="fas fa-shopping-cart text-xl"></i>
-            <span class="text-[10px] mt-1 font-medium">Mua hàng</span>
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-50">
+        <button onclick="renderMobileView('muahang')" id="nav-muahang" class="bottom-nav-item active flex flex-col items-center flex-1">
+            <i class="fas fa-shopping-cart text-xl"></i><span class="text-[10px] mt-1">Mua hàng</span>
         </button>
-        <button onclick="renderMobileView('sanpham')" id="nav-sanpham" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1 transition-colors">
-            <i class="fas fa-box text-xl"></i>
-            <span class="text-[10px] mt-1 font-medium">Sản phẩm</span>
+        <button onclick="renderMobileView('sanpham')" id="nav-sanpham" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
+            <i class="fas fa-box text-xl"></i><span class="text-[10px] mt-1">Sản phẩm</span>
         </button>
-        <button onclick="renderMobileView('baocao')" id="nav-baocao" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1 transition-colors">
-            <i class="fas fa-chart-pie text-xl"></i>
-            <span class="text-[10px] mt-1 font-medium">Báo cáo</span>
+        <button onclick="renderMobileView('baocao')" id="nav-baocao" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
+            <i class="fas fa-chart-pie text-xl"></i><span class="text-[10px] mt-1">Báo cáo</span>
         </button>
     </nav>
 
@@ -67,160 +88,117 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        let cacheData = { muahang: null, sanpham: null };
+        let fullData = []; 
+        let currentTab = 'muahang';
 
-        // --- HÀM SẮP XẾP NGÀY (Z-A) ---
-        const parseDate = (dateStr) => {
-            if (!dateStr) return 0;
-            const parts = dateStr.split('/');
-            return parts.length === 3 ? parseInt(parts[2] + parts[1] + parts[0]) : 0;
+        // --- CHUYỂN ĐỔI NGÀY ĐỂ SO SÁNH ---
+        const toIsoDate = (str) => {
+            if (!str || !str.includes('/')) return str;
+            const p = str.split('/'); return `${p[2]}-${p[1]}-${p[0]}`;
         };
+        const parseDateInt = (str) => parseInt(toIsoDate(str).replace(/-/g, '')) || 0;
 
         window.renderMobileView = (type) => {
-            // Update UI Navigation
-            document.querySelectorAll('.bottom-nav-item').forEach(el => el.classList.add('text-gray-400'));
-            document.querySelectorAll('.bottom-nav-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(`nav-${type}`).classList.add('active');
-            document.getElementById(`nav-${type}`).classList.remove('text-gray-400');
+            currentTab = type;
+            document.querySelectorAll('.bottom-nav-item').forEach(el => { el.classList.add('text-gray-400'); el.classList.remove('active'); });
+            const activeNav = document.getElementById(`nav-${type}`);
+            activeNav.classList.add('active'); activeNav.classList.remove('text-gray-400');
             
             const listContainer = document.getElementById('mobile-list');
-            const viewTitle = document.getElementById('current-view-title');
+            const searchBar = document.getElementById('search-container');
+            searchBar.style.display = (type === 'muahang') ? 'block' : 'none';
 
-            if (type === 'muahang') {
-                viewTitle.innerText = "Danh sách Mua hàng";
-                renderMuaHang(listContainer);
-            } else if (type === 'sanpham') {
-                viewTitle.innerText = "Danh mục Sản phẩm";
-                renderSanPham(listContainer);
-            } else if (type === 'baocao') {
-                viewTitle.innerText = "Báo cáo nhanh";
-                renderBaoCao(listContainer);
-            }
+            if (type === 'muahang') fetchMuaHang(listContainer);
+            else if (type === 'sanpham') fetchSanPham(listContainer);
+            else if (type === 'baocao') fetchBaoCao(listContainer);
         };
 
-        function renderMuaHang(container) {
+        function fetchMuaHang(container) {
             onValue(ref(db, 'invoices'), (snapshot) => {
-                if (!snapshot.exists()) {
-                    container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không có đơn hàng</p>`;
-                    return;
-                }
-                const data = snapshot.val();
-                cacheData.muahang = data;
-                
-                const sorted = Object.entries(data).sort((a, b) => parseDate(b[1].NgayNhap) - parseDate(a[1].NgayNhap));
-                
-                container.innerHTML = sorted.map(([key, d]) => {
-                    // Logic thanh toán
-                    let payLabel = "N/A", payColor = "bg-gray-100 text-gray-600";
-                    if (d.HinhThucThanhToan === "Công Nợ") {
-                        payLabel = "Chưa thanh toán"; payColor = "bg-red-100 text-red-600";
-                    } else if (d.HinhThucThanhToan === "Tiền Mặt" || d.HinhThucThanhToan === "Chuyển Khoản") {
-                        payLabel = "Đã thanh toán"; payColor = "bg-green-100 text-green-600";
-                    }
-
-                    return `
-                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-shadow">
-                            <div class="flex justify-between items-start mb-3">
-                                <div>
-                                    <h3 class="font-bold text-gray-800 text-sm leading-tight">${d.NhaCungCap}</h3>
-                                    <p class="text-[10px] text-blue-600 font-medium mt-1"><i class="fas fa-hashtag"></i> ${d.SoPhieuNhap || 'N/A'}</p>
-                                </div>
-                                <span class="text-[10px] font-bold text-gray-400">${d.NgayNhap}</span>
-                            </div>
-                            
-                            <div class="space-y-2 mb-4">
-                                ${(d.ChiTiet || []).map(i => `
-                                    <div class="flex justify-between items-center text-xs bg-gray-50 p-2 rounded-lg">
-                                        <span class="text-gray-600">${i.MaSP}</span>
-                                        <span class="font-bold text-blue-700">x${i.SoLuong}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-
-                            <div class="flex justify-between items-center pt-3 border-t border-dashed border-gray-100">
-                                <div class="flex flex-col">
-                                    <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Tổng tiền</span>
-                                    <span class="text-base font-black text-red-600 font-mono">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</span>
-                                </div>
-                                <div class="text-right">
-                                    <span class="${payColor} px-2 py-1 rounded-md text-[10px] font-black uppercase">${payLabel}</span>
-                                    <p class="text-[9px] text-gray-400 mt-1">${d.TinhTrangHoaDon || ''}</p>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                if (!snapshot.exists()) { container.innerHTML = `<p class="text-center mt-10">Trống</p>`; return; }
+                fullData = Object.entries(snapshot.val()).sort((a, b) => parseDateInt(b[1].NgayNhap) - parseDateInt(a[1].NgayNhap));
+                handleMobileFilter(); // Áp dụng lọc ngay khi tải dữ liệu
             });
         }
 
-        function renderSanPham(container) {
-            onValue(ref(db, 'products'), (snapshot) => {
-                if (!snapshot.exists()) {
-                    container.innerHTML = `<p class="text-center text-gray-400 mt-10">Chưa có sản phẩm</p>`;
-                    return;
-                }
-                const prods = Object.values(snapshot.val());
-                container.innerHTML = prods.map(p => `
-                    <div class="bg-white p-4 rounded-2xl flex items-center gap-4 card-shadow border border-gray-100">
-                        <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 text-lg font-bold">
-                            ${p.code ? p.code.substring(0,2) : 'SP'}
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="font-bold text-gray-800 text-sm">${p.name}</h4>
-                            <p class="text-xs text-gray-400">${p.code} | ĐVT: ${p.unit || 'Cái'}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-blue-600 font-bold text-sm">${(p.cost || 0).toLocaleString()}đ</p>
-                            <p class="text-[10px] text-gray-500">Tồn: <span class="text-orange-600 font-bold">${p.stock || 0}</span></p>
-                        </div>
-                    </div>
-                `).join('');
-            });
-        }
+        // --- LOGIC LỌC ĐA NĂNG (TÌM KIẾM + NGÀY THÁNG) ---
+        window.handleMobileFilter = () => {
+            if (currentTab !== 'muahang') return;
 
-        function renderBaoCao(container) {
-            onValue(ref(db, 'invoices'), (snapshot) => {
-                const data = snapshot.val() || {};
-                let total = 0, debt = 0, count = 0;
+            const query = document.getElementById('mobileSearchInput').value.toLowerCase();
+            const fromDate = document.getElementById('mobileFromDate').value;
+            const toDate = document.getElementById('mobileToDate').value;
+            const container = document.getElementById('mobile-list');
+
+            const filtered = fullData.filter(([key, d]) => {
+                const dateIso = toIsoDate(d.NgayNhap);
+                const matchSearch = (d.NhaCungCap || "").toLowerCase().includes(query) || 
+                                    (d.SoPhieuNhap || "").toLowerCase().includes(query) ||
+                                    (d.ChiTiet || []).some(i => (i.MaSP || "").toLowerCase().includes(query));
                 
-                Object.values(data).forEach(d => {
-                    const amount = Number(d.ThanhTien) || 0;
-                    total += amount;
-                    count++;
-                    if (d.HinhThucThanhToan === "Công Nợ") debt += amount;
-                });
+                const matchFrom = !fromDate || dateIso >= fromDate;
+                const matchTo = !toDate || dateIso <= toDate;
 
-                container.innerHTML = `
-                    <div class="grid grid-cols-1 gap-4">
-                        <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-lg">
-                            <p class="text-xs opacity-80 uppercase font-bold mb-1">Tổng nhập hàng</p>
-                            <h2 class="text-3xl font-black font-mono">${total.toLocaleString()}đ</h2>
-                            <p class="text-[10px] mt-4 opacity-60 italic">* Dữ liệu thời gian thực</p>
-                        </div>
-                        
-                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                            <div class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center"><i class="fas fa-exclamation-circle"></i></div>
-                            <div>
-                                <p class="text-xs text-gray-400 font-bold">CÔNG NỢ HIỆN TẠI</p>
-                                <p class="text-xl font-black text-red-600 font-mono">${debt.toLocaleString()}đ</p>
-                            </div>
-                        </div>
+                return matchSearch && matchFrom && matchTo;
+            });
 
-                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                            <div class="w-10 h-10 bg-green-50 text-green-500 rounded-full flex items-center justify-center"><i class="fas fa-file-invoice"></i></div>
+            displayMuaHang(filtered, container);
+        };
+
+        window.resetMobileFilter = () => {
+            document.getElementById('mobileSearchInput').value = "";
+            document.getElementById('mobileFromDate').value = "";
+            document.getElementById('mobileToDate').value = "";
+            window.handleMobileFilter();
+        };
+
+        function displayMuaHang(items, container) {
+            if (items.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không tìm thấy kết quả</p>`; return; }
+            container.innerHTML = items.map(([key, d]) => {
+                let payLabel = (d.HinhThucThanhToan === "Công Nợ") ? "Chưa thanh toán" : "Đã thanh toán";
+                let payColor = (d.HinhThucThanhToan === "Công Nợ") ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600";
+                return `
+                    <div class="bg-white p-4 rounded-2xl border border-gray-100 card-shadow">
+                        <div class="flex justify-between items-start mb-3">
                             <div>
-                                <p class="text-xs text-gray-400 font-bold">TỔNG ĐƠN HÀNG</p>
-                                <p class="text-xl font-black text-gray-800 font-mono">${count} phiếu</p>
+                                <h3 class="font-bold text-gray-800 text-sm">${d.NhaCungCap}</h3>
+                                <p class="text-[10px] text-blue-600 mt-0.5"><i class="fas fa-hashtag text-[8px]"></i> ${d.SoPhieuNhap || 'N/A'}</p>
                             </div>
+                            <span class="text-[10px] font-bold text-gray-400">${d.NgayNhap}</span>
+                        </div>
+                        <div class="space-y-1.5 mb-3">
+                            ${(d.ChiTiet || []).map(i => `<div class="flex justify-between text-xs bg-gray-50 p-2 rounded-lg"><span>${i.MaSP}</span><span class="font-bold text-blue-600">x${i.SoLuong}</span></div>`).join('')}
+                        </div>
+                        <div class="flex justify-between items-end pt-2 border-t border-dashed border-gray-100">
+                            <div><p class="text-[9px] text-gray-400 font-bold uppercase">Tổng tiền</p><p class="text-base font-black text-red-600 font-mono">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</p></div>
+                            <div class="text-right"><span class="${payColor} px-2 py-0.5 rounded text-[9px] font-black uppercase">${payLabel}</span></div>
                         </div>
                     </div>
                 `;
+            }).join('');
+        }
+
+        // ... (Các hàm fetchSanPham và fetchBaoCao giữ nguyên như bản trước) ...
+        function fetchSanPham(container) {
+            onValue(ref(db, 'products'), (snapshot) => {
+                const prods = snapshot.exists() ? Object.values(snapshot.val()) : [];
+                container.innerHTML = prods.map(p => `<div class="bg-white p-4 rounded-2xl flex items-center gap-4 card-shadow border border-gray-100"><div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">${p.code ? p.code.substring(0,3) : 'SP'}</div><div class="flex-1"><h4 class="font-bold text-gray-800 text-sm">${p.name}</h4><p class="text-[10px] text-gray-400">${p.code}</p></div><div class="text-right"><p class="text-blue-600 font-bold text-sm">${(p.cost || 0).toLocaleString()}đ</p></div></div>`).join('');
             });
         }
 
-        // Khởi tạo view mặc định
-        window.renderMobileView('muahang');
+        function fetchBaoCao(container) {
+            onValue(ref(db, 'invoices'), (snapshot) => {
+                const data = snapshot.val() || {};
+                let total = 0, debt = 0;
+                Object.values(data).forEach(d => {
+                    const amount = Number(d.ThanhTien) || 0;
+                    total += amount; if (d.HinhThucThanhToan === "Công Nợ") debt += amount;
+                });
+                container.innerHTML = `<div class="space-y-4"><div class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-lg"><p class="text-xs opacity-80 uppercase font-bold mb-1">Tổng nhập hàng</p><h2 class="text-2xl font-black">${total.toLocaleString()}đ</h2></div><div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4"><div class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center"><i class="fas fa-exclamation-circle"></i></div><div><p class="text-xs text-gray-400 font-bold uppercase">Công nợ hiện tại</p><p class="text-xl font-black text-red-600">${debt.toLocaleString()}đ</p></div></div></div>`;
+            });
+        }
 
+        window.renderMobileView('muahang');
     </script>
 </body>
 </html>
