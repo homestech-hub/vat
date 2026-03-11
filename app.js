@@ -33,14 +33,65 @@ window.toggleModal = (id) => {
     if (modal) modal.classList.toggle('hidden');
 };
 
-// --- QUẢN LÝ NHÀ CUNG CẤP (NCC) ---
-async function generateNCCCode() {
-    const snapshot = await get(ref(db, 'vendors'));
-    if (!snapshot.exists()) return "NCC001";
-    const codes = Object.values(snapshot.val()).map(v => parseInt(v.code?.replace("NCC", "") || 0));
-    return "NCC" + (Math.max(...codes) + 1).toString().padStart(3, '0');
-}
+// --- QUẢN LÝ CHI PHÍ LƯƠNG ---
+window.saveSalary = async () => {
+    const key = document.getElementById('edit_salary_key').value;
+    const staff = document.getElementById('s_staff').value.trim();
+    const amount = parseInt(document.getElementById('s_amount').value) || 0;
 
+    if (!staff) return alert("Vui lòng nhập tên nhân viên hoặc bộ phận!");
+    if (amount <= 0) return alert("Vui lòng nhập số tiền lương hợp lệ!");
+
+    const data = {
+        month: document.getElementById('s_month').value,
+        year: document.getElementById('s_year').value,
+        staff: staff,
+        note: document.getElementById('s_note').value.trim(),
+        amount: amount,
+        status: document.getElementById('s_status').value,
+        updatedAt: Date.now()
+    };
+
+    try {
+        if (key) {
+            await update(ref(db, `salaries/${key}`), data);
+            alert("Đã cập nhật thông tin lương!");
+        } else {
+            data.createdAt = Date.now();
+            await push(ref(db, 'salaries'), data);
+            alert("Đã lưu phiếu lương mới!");
+        }
+        window.toggleModal('modal-luong');
+    } catch (error) {
+        console.error(error);
+        alert("Có lỗi xảy ra khi lưu dữ liệu!");
+    }
+};
+
+window.editSalary = async (key) => {
+    const snapshot = await get(ref(db, `salaries/${key}`));
+    if (snapshot.exists()) {
+        const d = snapshot.val();
+        document.getElementById('edit_salary_key').value = key;
+        document.getElementById('s_month').value = d.month;
+        document.getElementById('s_year').value = d.year;
+        document.getElementById('s_staff').value = d.staff;
+        document.getElementById('s_note').value = d.note || '';
+        document.getElementById('s_amount').value = d.amount;
+        document.getElementById('s_status').value = d.status;
+        
+        document.getElementById('salaryModalTitle').innerText = "Chỉnh sửa phiếu lương";
+        window.toggleModal('modal-luong');
+    }
+};
+
+window.deleteSalary = async (key) => {
+    if (confirm("Bạn có chắc chắn muốn xóa bản ghi lương này?")) {
+        await remove(ref(db, `salaries/${key}`));
+    }
+};
+
+// --- QUẢN LÝ NHÀ CUNG CẤP ---
 window.saveNCC = async () => {
     const key = document.getElementById('edit_ncc_key')?.value;
     const name = document.getElementById('ncc_name').value.trim();
@@ -56,44 +107,32 @@ window.saveNCC = async () => {
     if (key) {
         await update(ref(db, `vendors/${key}`), data);
     } else {
-        data.code = await generateNCCCode();
+        const codesnapshot = await get(ref(db, 'vendors'));
+        let newCode = "NCC001";
+        if (codesnapshot.exists()) {
+            const codes = Object.values(codesnapshot.val()).map(v => parseInt(v.code?.replace("NCC", "") || 0));
+            newCode = "NCC" + (Math.max(...codes) + 1).toString().padStart(3, '0');
+        }
+        data.code = newCode;
         data.createdAt = Date.now();
         await push(ref(db, 'vendors'), data);
     }
-    
     alert("Thành công!");
-    if(document.getElementById('edit_ncc_key')) document.getElementById('edit_ncc_key').value = '';
     window.toggleModal('modal-ncc');
-};
-
-window.editNCC = (key, name, phone, bank, address) => {
-    const keyInput = document.getElementById('edit_ncc_key');
-    if (keyInput) keyInput.value = key;
-    document.getElementById('ncc_name').value = name;
-    document.getElementById('ncc_phone').value = phone;
-    document.getElementById('ncc_bank').value = bank;
-    document.getElementById('ncc_address').value = address;
-    window.toggleModal('modal-ncc');
-};
-
-window.deleteNCC = async (key, name) => {
-    if (confirm(`Xóa nhà cung cấp ${name}?`)) await remove(ref(db, `vendors/${key}`));
 };
 
 // --- QUẢN LÝ SẢN PHẨM ---
-async function generateProductCode() {
-    const snapshot = await get(ref(db, 'products'));
-    if (!snapshot.exists()) return "SP001";
-    const codes = Object.values(snapshot.val()).map(p => parseInt(p.code?.replace("SP", "") || 0));
-    return "SP" + (Math.max(...codes) + 1).toString().padStart(3, '0');
-}
-
 window.saveProduct = async () => {
     const name = document.getElementById('p_name').value;
     if (!name) return alert("Nhập tên SP!");
-    const code = await generateProductCode();
+    const snapshot = await get(ref(db, 'products'));
+    let newCode = "SP001";
+    if (snapshot.exists()) {
+        const codes = Object.values(snapshot.val()).map(p => parseInt(p.code?.replace("SP", "") || 0));
+        newCode = "SP" + (Math.max(...codes) + 1).toString().padStart(3, '0');
+    }
     await push(ref(db, 'products'), {
-        code, name,
+        code: newCode, name,
         cost: parseInt(document.getElementById('p_cost').value) || 0,
         unit: document.getElementById('p_unit').value,
         stock: parseInt(document.getElementById('p_stock').value) || 0
@@ -101,226 +140,28 @@ window.saveProduct = async () => {
     window.toggleModal('modal-sanpham');
 };
 
-// --- QUẢN LÝ MUA HÀNG ---
-window.openInvoiceModal = () => {
-    const editKeyInput = document.getElementById('edit_invoice_key');
-    if (editKeyInput) editKeyInput.value = ''; 
-
-    const vendorSelect = document.getElementById('vendor');
-    if (vendorSelect) vendorSelect.selectedIndex = 0;
-    
-    const linkInput = document.getElementById('invoiceLink');
-    if (linkInput) linkInput.value = '';
-
-    const today = new Date().toISOString().split('T')[0];
-    const orderDateInput = document.getElementById('orderDate');
-    if (orderDateInput) orderDateInput.value = today;
-
-    const itemsTable = document.getElementById('invoiceItems');
-    if (itemsTable) itemsTable.innerHTML = '';
-
-    document.getElementById('subTotalDisplay').innerText = '0';
-    document.getElementById('taxTotalDisplay').innerText = '0';
-    document.getElementById('totalAmountDisplay').innerText = '0';
-
-    document.getElementById('invoiceStatus').value = 'Chưa nhận HĐ';
-    document.getElementById('paymentStatus').value = 'Chưa thanh toán';
-
-    window.toggleModal('modal-muahang');
-};
-
-window.addRow = () => {
-    const tbody = document.getElementById('invoiceItems');
-    if (availableProducts.length === 0) return alert("Hãy thêm sản phẩm ở tab Sản phẩm trước!");
-
-    const rowId = Date.now();
-    const options = availableProducts.map(p => `<option value="${p.code}" data-cost="${p.cost}">${p.code} - ${p.name}</option>`).join('');
-    
-    const row = document.createElement('tr');
-    row.id = `row-${rowId}`;
-    row.innerHTML = `
-        <td class="p-1 border"><select onchange="updateRowPrice(this, ${rowId})" class="w-full p-1 border-none">${options}</select></td>
-        <td class="p-1 border"><input type="number" value="1" oninput="calculateRow(${rowId})" class="w-full text-center qty"></td>
-        <td class="p-1 border"><input type="text" oninput="handleMoneyInput(this); calculateRow(${rowId})" class="w-full text-right cost"></td>
-        <td class="p-1 border"><select onchange="calculateRow(${rowId})" class="w-full text-center tax"><option value="0">0%</option><option value="8">8%</option><option value="10">10%</option></select></td>
-        <td class="p-1 border text-right font-bold total-row">0</td>
-        <td class="p-1 border text-center text-red-500 cursor-pointer" onclick="this.closest('tr').remove(); calculateTotalInvoice()">✕</td>
-    `;
-    tbody.appendChild(row);
-};
-
-window.updateRowPrice = (select, rowId) => {
-    const opt = select.options[select.selectedIndex];
-    const row = document.getElementById(`row-${rowId}`);
-    row.querySelector('.cost').value = parseInt(opt.dataset.cost || 0).toLocaleString('vi-VN');
-    window.calculateRow(rowId);
-};
-
-window.calculateRow = (rowId) => {
-    const row = document.getElementById(`row-${rowId}`);
-    const qty = parseFloat(row.querySelector('.qty').value) || 0;
-    const cost = parseInt(row.querySelector('.cost').value.replace(/\./g, "")) || 0;
-    const tax = parseInt(row.querySelector('.tax').value) || 0;
-    
-    const amount = qty * cost;
-    const taxAmount = amount * (tax / 100);
-    row.dataset.amount = amount;
-    row.dataset.tax = taxAmount;
-    row.querySelector('.total-row').innerText = (amount + taxAmount).toLocaleString('vi-VN');
-    calculateTotalInvoice();
-};
-
-function calculateTotalInvoice() {
-    let sub = 0, tax = 0;
-    document.querySelectorAll('#invoiceItems tr').forEach(r => {
-        sub += parseFloat(r.dataset.amount || 0);
-        tax += parseFloat(r.dataset.tax || 0);
-    });
-    document.getElementById('subTotalDisplay').innerText = sub.toLocaleString('vi-VN');
-    document.getElementById('taxTotalDisplay').innerText = tax.toLocaleString('vi-VN');
-    document.getElementById('totalAmountDisplay').innerText = (sub + tax).toLocaleString('vi-VN');
-}
-
-window.saveInvoice = async () => {
-    const key = document.getElementById('edit_invoice_key').value;
-    const vendor = document.getElementById('vendor').value;
-    const invoiceLink = document.getElementById('invoiceLink').value;
-    
-    if(!vendor) return alert("Vui lòng chọn Nhà cung cấp!");
-
-    const items = [];
-    document.querySelectorAll('#invoiceItems tr').forEach(row => {
-        const select = row.querySelector('select');
-        const qty = parseFloat(row.querySelector('.qty').value) || 0;
-        const cost = parseInt(row.querySelector('.cost').value.replace(/\./g, "")) || 0;
-        const tax = parseInt(row.querySelector('.tax').value) || 0;
-        const total = parseInt(row.querySelector('.total-row').innerText.replace(/\./g, "")) || 0;
-
-        if (select && select.value) {
-            items.push({
-                productCode: select.value,
-                productName: select.options[select.selectedIndex].text.split(' - ')[1],
-                qty, cost, tax, total
-            });
-        }
-    });
-
-    if (items.length === 0) return alert("Vui lòng thêm ít nhất một sản phẩm!");
-    
-    const amount = parseInt(document.getElementById('totalAmountDisplay').innerText.replace(/\./g, "")) || 0;
-    
-    const data = {
-        vendor,
-        orderDate: document.getElementById('orderDate').value,
-        amount,
-        paymentStatus: document.getElementById('paymentStatus').value,
-        invoiceStatus: document.getElementById('invoiceStatus').value,
-        invoiceLink: invoiceLink,
-        items: items,
-        updatedAt: Date.now()
-    };
-
-    if (key) {
-        await update(ref(db, `invoices/${key}`), data);
-        alert("Đã cập nhật đơn hàng thành công!");
-    } else {
-        data.createdAt = Date.now();
-        await push(ref(db, 'invoices'), data);
-        alert("Đã lưu đơn hàng mới thành công!");
-    }
-    
-    window.toggleModal('modal-muahang');
-};
-
-window.editInvoice = async (key) => {
-    const snapshot = await get(ref(db, `invoices/${key}`));
-    if (snapshot.exists()) {
-        const d = snapshot.val();
-        document.getElementById('edit_invoice_key').value = key;
-        document.getElementById('vendor').value = d.vendor || '';
-        document.getElementById('orderDate').value = d.orderDate || '';
-        document.getElementById('invoiceStatus').value = d.invoiceStatus || 'Chưa nhận HĐ';
-        document.getElementById('paymentStatus').value = d.paymentStatus || 'Chưa thanh toán';
-        document.getElementById('invoiceLink').value = d.invoiceLink || '';
-        
-        const tbody = document.getElementById('invoiceItems');
-        tbody.innerHTML = "";
-
-        if (d.items && Array.isArray(d.items)) {
-            d.items.forEach(item => {
-                const rowId = Date.now() + Math.random();
-                const options = availableProducts.map(p => 
-                    `<option value="${p.code}" data-cost="${p.cost}" ${p.code === item.productCode ? 'selected' : ''}>${p.code} - ${p.name}</option>`
-                ).join('');
-
-                const row = document.createElement('tr');
-                row.id = `row-${rowId}`;
-                row.innerHTML = `
-                    <td class="p-1 border"><select onchange="updateRowPrice(this, ${rowId})" class="w-full p-1 border-none">${options}</select></td>
-                    <td class="p-1 border"><input type="number" value="${item.qty}" oninput="calculateRow(${rowId})" class="w-full text-center qty"></td>
-                    <td class="p-1 border"><input type="text" value="${item.cost.toLocaleString('vi-VN')}" oninput="handleMoneyInput(this); calculateRow(${rowId})" class="w-full text-right cost"></td>
-                    <td class="p-1 border">
-                        <select onchange="calculateRow(${rowId})" class="w-full text-center tax">
-                            <option value="0" ${item.tax === 0 ? 'selected' : ''}>0%</option>
-                            <option value="8" ${item.tax === 8 ? 'selected' : ''}>8%</option>
-                            <option value="10" ${item.tax === 10 ? 'selected' : ''}>10%</option>
-                        </select>
-                    </td>
-                    <td class="p-1 border text-right font-bold total-row">${item.total.toLocaleString('vi-VN')}</td>
-                    <td class="p-1 border text-center text-red-500 cursor-pointer" onclick="this.closest('tr').remove(); calculateTotalInvoice()">✕</td>
-                `;
-                tbody.appendChild(row);
-                row.dataset.amount = item.qty * item.cost;
-                row.dataset.tax = (item.qty * item.cost) * (item.tax / 100);
-            });
-        }
-        
-        calculateTotalInvoice();
-        window.toggleModal('modal-muahang');
-    }
-};
-
-window.deleteInvoice = async (key) => {
-    if (confirm("Xóa đơn hàng này?")) await remove(ref(db, `invoices/${key}`));
-};
-
-// --- HÀM CẬP NHẬT BÁO CÁO (Đã tối ưu) ---
+// --- HÀM CẬP NHẬT BÁO CÁO ---
 function updateGeneralReport(invoicesData) {
-    let totalChi = 0;
-    let totalDon = 0;
-    let totalNo = 0;
+    let totalChi = 0, totalDon = 0, totalNo = 0;
     let vendorSummary = {};
 
     Object.entries(invoicesData).forEach(([key, d]) => {
-        const amount = parseInt(d.amount) || 0;
+        const amount = parseInt(d.ThanhTien) || 0;
         totalChi += amount;
         totalDon++;
-        
-        if (d.paymentStatus !== "Đã thanh toán") {
-            totalNo += amount;
-        }
+        if (d.HinhThucThanhToan !== "Đã thanh toán" && d.HinhThucThanhToan !== "Tiền Mặt") totalNo += amount;
 
-        // Thống kê theo nhà cung cấp
-        if (!vendorSummary[d.vendor]) {
-            vendorSummary[d.vendor] = { qty: 0, sum: 0, hasPendingInvoice: false };
-        }
-        vendorSummary[d.vendor].qty++;
-        vendorSummary[d.vendor].sum += amount;
-        if (d.invoiceStatus === "Chưa nhận HĐ") {
-            vendorSummary[d.vendor].hasPendingInvoice = true;
-        }
+        const vName = d.NhaCungCap || "Chưa rõ";
+        if (!vendorSummary[vName]) vendorSummary[vName] = { qty: 0, sum: 0, hasPendingInvoice: false };
+        vendorSummary[vName].qty++;
+        vendorSummary[vName].sum += amount;
+        if (d.TinhTrangHoaDon === "Chưa Nhận HĐ") vendorSummary[vName].hasPendingInvoice = true;
     });
 
-    // Cập nhật các Card
-    const reportTotal = document.getElementById('report-total-amount');
-    const reportCount = document.getElementById('report-total-invoices');
-    const reportUnpaid = document.getElementById('report-unpaid-amount');
+    if (document.getElementById('report-total-amount')) document.getElementById('report-total-amount').innerText = totalChi.toLocaleString('vi-VN') + "đ";
+    if (document.getElementById('report-total-invoices')) document.getElementById('report-total-invoices').innerText = totalDon;
+    if (document.getElementById('report-unpaid-amount')) document.getElementById('report-unpaid-amount').innerText = totalNo.toLocaleString('vi-VN') + "đ";
 
-    if (reportTotal) reportTotal.innerText = totalChi.toLocaleString('vi-VN') + "đ";
-    if (reportCount) reportCount.innerText = totalDon;
-    if (reportUnpaid) reportUnpaid.innerText = totalNo.toLocaleString('vi-VN') + "đ";
-
-    // Cập nhật Bảng báo cáo
     const reportTbody = document.getElementById('report-vendor-body');
     if (reportTbody) {
         reportTbody.innerHTML = Object.entries(vendorSummary).map(([name, stat]) => `
@@ -328,19 +169,13 @@ function updateGeneralReport(invoicesData) {
                 <td class="p-4 font-bold">${name}</td>
                 <td class="p-4 text-center">${stat.qty} đơn</td>
                 <td class="p-4 text-right font-bold text-blue-600">${stat.sum.toLocaleString()}đ</td>
-                <td class="p-4 text-center">
-                    ${stat.hasPendingInvoice 
-                        ? '<span class="text-red-500 text-xs"><i class="fas fa-exclamation-triangle"></i> Thiếu HĐ</span>' 
-                        : '<span class="text-green-500 text-xs"><i class="fas fa-check-circle"></i> Đủ HĐ</span>'}
-                </td>
-            </tr>
-        `).join('');
+                <td class="p-4 text-center">${stat.hasPendingInvoice ? '<span class="text-red-500 text-xs font-bold">⚠️ Thiếu HĐ</span>' : '<span class="text-green-500 text-xs font-bold">✅ Đủ HĐ</span>'}</td>
+            </tr>`).join('');
     }
 }
 
 // --- KHỞI TẠO ỨNG DỤNG ---
 function initApp() {
-    // 1. Lắng nghe Sản phẩm
     onValue(ref(db, 'products'), (snapshot) => {
         const prodTbody = document.getElementById('productTableBody');
         if (!prodTbody) return;
@@ -348,52 +183,23 @@ function initApp() {
         if (snapshot.exists()) {
             Object.entries(snapshot.val()).forEach(([key, p]) => {
                 availableProducts.push({ key, ...p });
-                prodTbody.innerHTML += `<tr class="border-b text-sm">
-                    <td class="p-4 font-bold text-blue-600">${p.code}</td>
-                    <td class="p-4">${p.name}</td>
-                    <td class="p-4 text-right">${(p.cost || 0).toLocaleString()}đ</td>
-                    <td class="p-4 text-center">${p.unit}</td>
-                    <td class="p-4 text-center font-bold">${p.stock}</td>
-                    <td class="p-4 text-center">
-                         <button class="text-red-600" onclick="remove(ref(db, 'products/${key}'))"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>`;
+                prodTbody.innerHTML += `<tr class="border-b text-sm"><td class="p-4 font-bold text-blue-600">${p.code}</td><td class="p-4">${p.name}</td><td class="p-4 text-right">${(p.cost || 0).toLocaleString()}đ</td><td class="p-4 text-center">${p.unit}</td><td class="p-4 text-center font-bold">${p.stock}</td><td class="p-4 text-center"><button class="text-red-600" onclick="remove(ref(db, 'products/${key}'))"><i class="fas fa-trash"></i></button></td></tr>`;
             });
         }
     });
 
-    // 2. Lắng nghe Nhà cung cấp
     onValue(ref(db, 'vendors'), (snapshot) => {
         const nccTbody = document.getElementById('nccTableBody');
-        const vendorSelect = document.getElementById('vendor');
         if (!nccTbody) return;
         nccTbody.innerHTML = "";
-        if (vendorSelect) vendorSelect.innerHTML = '<option value="">-- Chọn nhà cung cấp --</option>';
-
         if (snapshot.exists()) {
             Object.entries(snapshot.val()).forEach(([key, v]) => {
-                nccTbody.innerHTML += `
-                    <tr class="border-b hover:bg-gray-50 text-sm">
-                        <td class="p-4 font-bold">${v.code}</td>
-                        <td class="p-4"><b>${v.name}</b><br><small>${v.address || ''}</small></td>
-                        <td class="p-4">${v.phone || '-'}</td>
-                        <td class="p-4 font-mono text-xs">${v.bank || '-'}</td>
-                        <td class="p-4 text-center">
-                            <button onclick="editNCC('${key}', '${v.name}', '${v.phone||''}', '${v.bank||''}', '${v.address||''}')" class="text-blue-600 mr-3"><i class="fas fa-edit"></i></button>
-                            <button onclick="deleteNCC('${key}', '${v.name}')" class="text-red-500"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>`;
-                if (vendorSelect) {
-                    const opt = document.createElement('option');
-                    opt.value = v.name;
-                    opt.textContent = `${v.code} - ${v.name}`;
-                    vendorSelect.appendChild(opt);
-                }
+                nccTbody.innerHTML += `<tr class="border-b hover:bg-gray-50 text-sm"><td class="p-4 font-bold">${v.code}</td><td class="p-4"><b>${v.name}</b></td><td class="p-4">${v.phone || '-'}</td><td class="p-4 font-mono text-xs">${v.bank || '-'}</td><td class="p-4 text-center"><button onclick="remove(ref(db, 'vendors/${key}'))" class="text-red-500"><i class="fas fa-trash"></i></button></td></tr>`;
             });
         }
     });
 
-    // 3. Lắng nghe Hóa đơn (Kết hợp hiển thị bảng và báo cáo)
+    // 3. Lắng nghe Hóa đơn (Cập nhật hiển thị mỗi SP một dòng)
     onValue(ref(db, 'invoices'), (snapshot) => {
         const invTbody = document.getElementById('invoiceTableBody');
         if (!invTbody) return;
@@ -401,31 +207,76 @@ function initApp() {
 
         if (snapshot.exists()) {
             const data = snapshot.val();
-            // Cập nhật Báo cáo
             updateGeneralReport(data);
-
-            // Cập nhật Bảng danh sách
+            
             Object.entries(data).reverse().forEach(([key, d]) => {
-                const payColor = d.paymentStatus === "Đã thanh toán" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700";
-                const driveIcon = d.invoiceLink ? `<a href="${d.invoiceLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
+                const payColor = (d.HinhThucThanhToan === "Đã thanh toán" || d.HinhThucThanhToan === "Tiền Mặt") 
+                                 ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700";
+                
+                let driveLink = "";
+                if (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') driveLink = d.LinkHoaDon.Url;
+                else if (typeof d.LinkHoaDon === 'string') driveLink = d.LinkHoaDon;
+                const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive text-[10px]"></i></a>` : "";
 
                 invTbody.innerHTML += `
                     <tr class="border-b text-sm hover:bg-gray-50">
-                        <td class="p-4">${d.orderDate}</td>
-                        <td class="p-4 font-bold">${d.vendor} ${driveIcon}</td>
-                        <td class="p-4 text-xs text-gray-500">${(d.items || []).map(i => i.productName).join(', ').substring(0, 30)}...</td>
-                        <td class="p-4 font-mono font-bold text-red-600">${(d.amount || 0).toLocaleString()}đ</td>
-                        <td class="p-4 text-center"><span class="${payColor} p-1 rounded text-xs font-bold">${d.paymentStatus}</span></td>
-                        <td class="p-4 text-center text-gray-500">${d.invoiceStatus}</td>
-                        <td class="p-4 text-center">
-                            <button onclick="editInvoice('${key}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button>
-                            <button onclick="deleteInvoice('${key}')" class="text-red-600"><i class="fas fa-trash"></i></button>
+                        <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
+                        <td class="p-4 align-top">
+                            <div class="font-bold text-gray-800 flex items-center gap-1">
+                                ${d.NhaCungCap || ''} ${driveIcon}
+                            </div>
+                            <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
+                                <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
+                            </div>
+                        </td>
+                        <td class="p-4 text-xs text-gray-600 align-top">
+                            <div class="flex flex-col gap-1.5">
+                                ${(d.ChiTiet || []).map((i, index) => `
+                                    <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
+                                        <span class="text-gray-300 font-mono text-[10px] mt-0.5">${index + 1}</span>
+                                        <div class="flex flex-col">
+                                            <span class="font-medium text-gray-700">${i.MaSP}</span>
+                                            <span class="text-[10px] text-blue-500 font-bold">SL: ${i.SoLuong}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </td>
+                        <td class="p-4 font-mono font-bold text-red-600 text-right align-top">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</td>
+                        <td class="p-4 text-center align-top">
+                            <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${d.HinhThucThanhToan || 'N/A'}</span>
+                        </td>
+                        <td class="p-4 text-center text-gray-400 text-[11px] align-top">${d.TinhTrangHoaDon || ''}</td>
+                        <td class="p-4 text-center align-top">
+                            <button onclick="remove(ref(db, 'invoices/${key}'))" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>`;
             });
         } else {
-            // Reset báo cáo về 0 nếu không có hóa đơn
             updateGeneralReport({});
+        }
+    });
+
+    onValue(ref(db, 'salaries'), (snapshot) => {
+        const salaryTbody = document.getElementById('salaryTableBody');
+        if (!salaryTbody) return;
+        salaryTbody.innerHTML = "";
+        if (snapshot.exists()) {
+            Object.entries(snapshot.val()).reverse().forEach(([key, s]) => {
+                const statusColor = s.status === "Đã thanh toán" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
+                salaryTbody.innerHTML += `
+                    <tr class="border-b text-sm hover:bg-gray-50">
+                        <td class="p-4 font-medium">${s.month}/${s.year}</td>
+                        <td class="p-4 font-bold text-gray-800">${s.staff}</td>
+                        <td class="p-4 text-xs text-gray-500 max-w-[200px] truncate">${s.note || ''}</td>
+                        <td class="p-4 text-right font-mono font-bold text-blue-600">${(s.amount || 0).toLocaleString()}đ</td>
+                        <td class="p-4 text-center"><span class="${statusColor} px-2 py-1 rounded text-xs font-bold">${s.status}</span></td>
+                        <td class="p-4 text-center">
+                            <button onclick="editSalary('${key}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button>
+                            <button onclick="remove(ref(db, 'salaries/${key}'))" class="text-red-600"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>`;
+            });
         }
     });
 }
