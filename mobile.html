@@ -3,74 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mobile - Homestech VAT</title>
+    <title>Homestech VAT - Mobile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        .bottom-nav-item.active { color: #1d4ed8; }
-        .card-shadow { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
-        input[type="date"]::-webkit-inner-spin-button,
-        input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
+        :root { --primary: #0284c7; --bg: #f1f5f9; --border: #e2e8f0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: #0f172a; -webkit-tap-highlight-color: transparent; }
+        .active-nav { color: var(--primary) !important; border-top: 3px solid var(--primary); font-weight: 800; }
+        .data-card { background: white; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .amount { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+        .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; border: 1px solid transparent; }
+        .badge-success { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+        .badge-danger { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .page-btn { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); background: white; }
+        .page-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
     </style>
 </head>
-<body class="bg-gray-50 pb-24">
+<body class="pb-24">
 
-    <div class="bg-blue-700 text-white p-4 sticky top-0 z-50 shadow-md flex justify-between items-center">
-        <div>
-            <h1 class="text-lg font-bold">Homestech System</h1>
-            <p class="text-[10px] opacity-70" id="current-view-title">Danh sách Mua hàng</p>
-        </div>
-        <button onclick="location.reload()" class="p-2 active:scale-90 transition-transform"><i class="fas fa-sync-alt"></i></button>
-    </div>
-
-    <div id="search-container" class="p-3 bg-white border-b sticky top-[68px] z-40 space-y-2">
-        <div class="relative border rounded-xl bg-gray-50">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                <i class="fas fa-search text-xs"></i>
-            </span>
-            <input type="text" id="mobileSearchInput" onkeyup="handleMobileFilter()" 
-                placeholder="Tìm kiếm thông tin..." 
-                class="w-full pl-9 pr-4 py-2 bg-transparent text-sm focus:outline-none">
-        </div>
-        
+    <header class="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm">
         <div class="flex items-center gap-2">
-            <div class="flex-1 flex items-center gap-1 bg-gray-50 border rounded-lg px-2 py-1">
-                <span class="text-[9px] font-bold text-gray-400 uppercase">Từ</span>
-                <input type="date" id="mobileFromDate" onchange="handleMobileFilter()" class="bg-transparent text-xs w-full focus:outline-none">
-            </div>
-            <div class="flex-1 flex items-center gap-1 bg-gray-50 border rounded-lg px-2 py-1">
-                <span class="text-[9px] font-bold text-gray-400 uppercase">Đến</span>
-                <input type="date" id="mobileToDate" onchange="handleMobileFilter()" class="bg-transparent text-xs w-full focus:outline-none">
-            </div>
-            <button onclick="resetMobileFilter()" class="p-2 text-gray-400 hover:text-red-500 transition-colors"><i class="fas fa-undo-alt text-xs"></i></button>
+            <div class="w-8 h-8 bg-sky-600 rounded-lg flex items-center justify-center text-white"><i class="fas fa-file-invoice-dollar"></i></div>
+            <h1 class="text-sm font-extrabold uppercase">Homestech <span class="text-sky-600">VAT</span></h1>
+        </div>
+        <div id="loading-spinner" class="text-sky-600 text-xs font-bold uppercase flex items-center gap-2">
+            <i class="fas fa-circle-notch animate-spin"></i> Syncing
+        </div>
+    </header>
+
+    <div id="filter-section" class="p-4 sticky top-[57px] z-40 bg-slate-50/95 border-b border-slate-200 space-y-3">
+        <div class="relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fas fa-search text-xs"></i></span>
+            <input type="text" id="searchInput" onkeyup="handleFilter()" placeholder="Tìm tên, mã, sản phẩm..." class="w-full pl-9 pr-4 py-3 text-sm outline-none font-medium">
+        </div>
+        <div class="flex gap-2">
+            <input type="date" id="fromDate" onchange="handleFilter()" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none shadow-sm">
+            <input type="date" id="toDate" onchange="handleFilter()" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none shadow-sm">
         </div>
     </div>
 
-    <div id="mobile-content" class="p-3">
-        <div id="mobile-list" class="space-y-4">
-            <div class="flex justify-center items-center mt-20">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
-            </div>
-        </div>
+    <main class="px-4 mt-4" id="main-list"></main>
+
+    <div id="pagination-container" class="px-4 py-6 flex flex-col items-center gap-3">
+        <div id="page-info" class="text-[10px] font-black text-slate-400 uppercase tracking-widest"></div>
+        <div id="page-controls" class="flex flex-wrap justify-center gap-1.5"></div>
     </div>
 
-    <button onclick="window.location.href='index.html'" class="fixed bottom-24 right-6 bg-blue-600 text-white w-12 h-12 rounded-full shadow-2xl flex items-center justify-center text-lg z-40 active:scale-95 transition-transform">
-        <i class="fas fa-desktop"></i>
-    </button>
-
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-        <button onclick="renderMobileView('muahang')" id="nav-muahang" class="bottom-nav-item active flex flex-col items-center flex-1">
-            <i class="fas fa-shopping-cart text-xl"></i><span class="text-[10px] mt-1 font-medium">Mua hàng</span>
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex h-20 items-center z-50">
+        <button onclick="changeTab('muahang')" id="nav-muahang" class="flex-1 flex flex-col items-center text-slate-400">
+            <i class="fas fa-shopping-cart text-lg"></i><span class="text-[9px] mt-1 font-bold uppercase">Mua hàng</span>
         </button>
-        <button onclick="renderMobileView('banhang')" id="nav-banhang" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
-            <i class="fas fa-hand-holding-usd text-xl"></i><span class="text-[10px] mt-1 font-medium">Bán hàng</span>
+        <button onclick="changeTab('banhang')" id="nav-banhang" class="flex-1 flex flex-col items-center text-slate-400">
+            <i class="fas fa-hand-holding-usd text-lg"></i><span class="text-[9px] mt-1 font-bold uppercase">Bán hàng</span>
         </button>
-        <button onclick="renderMobileView('sanpham')" id="nav-sanpham" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
-            <i class="fas fa-box text-xl"></i><span class="text-[10px] mt-1 font-medium">Sản phẩm</span>
-        </button>
-        <button onclick="renderMobileView('baocao')" id="nav-baocao" class="bottom-nav-item text-gray-400 flex flex-col items-center flex-1">
-            <i class="fas fa-chart-pie text-xl"></i><span class="text-[10px] mt-1 font-medium">Báo cáo</span>
+        <button onclick="changeTab('baocao')" id="nav-baocao" class="flex-1 flex flex-col items-center text-slate-400">
+            <i class="fas fa-chart-pie text-lg"></i><span class="text-[9px] mt-1 font-bold uppercase">Báo cáo</span>
         </button>
     </nav>
 
@@ -91,183 +79,257 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        let muahangData = [];
-        let banhangData = [];
-        let currentTab = 'muahang';
+        let STORE = { muahang: [], banhang: [] };
+        let filtered = [];
+        let tab = 'muahang';
+        let page = 1;
+        const limit = 10;
 
-        const toIsoDate = (str) => {
-            if (!str || !str.includes('/')) return str;
-            const p = str.split('/'); return `${p[2]}-${p[1]}-${p[0]}`;
+        const toIso = (s) => {
+            if (!s || !s.includes('/')) return s;
+            const p = s.split('/'); return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
         };
-        const parseDateInt = (str) => parseInt(toIsoDate(str).replace(/-/g, '')) || 0;
 
-        window.renderMobileView = (type) => {
-            currentTab = type;
-            document.querySelectorAll('.bottom-nav-item').forEach(el => { el.classList.add('text-gray-400'); el.classList.remove('active'); });
-            const activeNav = document.getElementById(`nav-${type}`);
-            activeNav.classList.add('active'); activeNav.classList.remove('text-gray-400');
+        const parseDate = (s) => {
+            if(!s) return 0;
+            return new Date(toIso(s)).getTime() || 0;
+        };
+
+        // --- REALTIME SYNC ---
+        onValue(ref(db, 'invoices'), (snap) => {
+            if(snap.exists()) {
+                STORE.muahang = Object.entries(snap.val()).sort((a,b) => parseDate(b[1].NgayNhap) - parseDate(a[1].NgayNhap));
+                if(tab === 'muahang') handleFilter();
+            }
+        });
+
+        onValue(ref(db, 'sales'), (snap) => {
+            if(snap.exists()) {
+                STORE.banhang = Object.entries(snap.val()).sort((a,b) => {
+                    const dA = a[1].NgayBan || a[1].Ngayban || "";
+                    const dB = b[1].NgayBan || b[1].Ngayban || "";
+                    return parseDate(dB) - parseDate(dA);
+                });
+                if(tab === 'banhang') handleFilter();
+            }
+            document.getElementById('loading-spinner').classList.add('hidden');
+        });
+
+        // --- ACTIONS ---
+        window.changeTab = (t) => {
+            tab = t;
+            page = 1;
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active-nav'));
+            document.getElementById(`nav-${t}`).classList.add('active-nav');
             
-            const listContainer = document.getElementById('mobile-list');
-            const searchBar = document.getElementById('search-container');
-            const viewTitle = document.getElementById('current-view-title');
-
-            // Ẩn hiện bộ lọc
-            searchBar.style.display = (type === 'muahang' || type === 'banhang') ? 'block' : 'none';
-
-            if (type === 'muahang') {
-                viewTitle.innerText = "Danh sách Mua hàng";
-                fetchData('invoices', 'muahang');
-            } else if (type === 'banhang') {
-                viewTitle.innerText = "Danh sách Bán hàng";
-                fetchData('sales', 'banhang');
-            } else if (type === 'sanpham') {
-                viewTitle.innerText = "Danh mục Sản phẩm";
-                fetchSanPham(listContainer);
-            } else if (type === 'baocao') {
-                viewTitle.innerText = "Báo cáo nhanh";
-                fetchBaoCao(listContainer);
+            if(t === 'baocao') {
+                document.getElementById('filter-section').classList.add('hidden');
+                document.getElementById('pagination-container').classList.add('hidden');
+                renderBaoCao();
+            } else {
+                document.getElementById('filter-section').classList.remove('hidden');
+                document.getElementById('pagination-container').classList.remove('hidden');
+                handleFilter();
             }
         };
 
-        function fetchData(node, type) {
-            onValue(ref(db, node), (snapshot) => {
-                const listContainer = document.getElementById('mobile-list');
-                if (!snapshot.exists()) { listContainer.innerHTML = `<p class="text-center mt-10 text-gray-400">Trống</p>`; return; }
-                
-                const dataArray = Object.entries(snapshot.val()).sort((a, b) => {
-                    const dateA = a[1].NgayNhap || a[1].NgayBan;
-                    const dateB = b[1].NgayNhap || b[1].NgayBan;
-                    return parseDateInt(dateB) - parseDateInt(dateA);
-                });
+        window.handleFilter = () => {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const fD = document.getElementById('fromDate').value;
+            const tD = document.getElementById('toDate').value;
+            const data = (tab === 'muahang') ? STORE.muahang : STORE.banhang;
 
-                if (type === 'muahang') muahangData = dataArray;
-                else banhangData = dataArray;
-
-                handleMobileFilter();
-            });
-        }
-
-        window.handleMobileFilter = () => {
-            const query = document.getElementById('mobileSearchInput').value.toLowerCase();
-            const fromDate = document.getElementById('mobileFromDate').value;
-            const toDate = document.getElementById('mobileToDate').value;
-            const container = document.getElementById('mobile-list');
-
-            const sourceData = (currentTab === 'muahang') ? muahangData : banhangData;
-
-            const filtered = sourceData.filter(([key, d]) => {
-                const dateIso = toIsoDate(d.NgayNhap || d.NgayBan);
+            filtered = data.filter(([k, d]) => {
+                const date = toIso(d.NgayNhap || d.NgayBan || d.Ngayban || "");
                 const name = (d.NhaCungCap || d.KhachHang || "").toLowerCase();
-                const idPhieu = (d.SoPhieuNhap || d.SoHoaDon || "").toLowerCase();
-                const hasProduct = (d.ChiTiet || []).some(i => (i.MaSP || "").toLowerCase().includes(query));
+                const id = (d.SoPhieuNhap || d.SoHoaDon || "").toLowerCase();
                 
-                const matchSearch = name.includes(query) || idPhieu.includes(query) || hasProduct;
-                const matchFrom = !fromDate || dateIso >= fromDate;
-                const matchTo = !toDate || dateIso <= toDate;
+                // SỬA LỖI .some() TẠI ĐÂY: Kiểm tra ChiTiet có phải mảng không
+                const details = d.ChiTiet;
+                const hasProd = Array.isArray(details) ? details.some(i => (i.MaSP || "").toLowerCase().includes(q)) : false;
 
-                return matchSearch && matchFrom && matchTo;
+                const mS = name.includes(q) || id.includes(q) || hasProd;
+                const mD = (!fD || date >= fD) && (!tD || date <= tD);
+                return mS && mD;
             });
 
-            renderList(filtered, container, currentTab);
+            page = 1;
+            renderItems();
         };
 
-        function renderList(items, container, type) {
-    if (items.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không tìm thấy kết quả</p>`; return; }
-    
-    container.innerHTML = items.map(([key, d]) => {
-        const isDebt = (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán");
-        const payLabel = isDebt ? "Chưa thanh toán" : "Đã thanh toán";
-        const payColor = isDebt ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700";
-        const date = d.NgayNhap || d.NgayBan;
-        const mainName = d.NhaCungCap || d.KhachHang;
-        const subId = d.SoPhieuNhap || d.SoHoaDon;
+        function renderItems() {
+    const container = document.getElementById('main-list');
+    const start = (page - 1) * limit;
+    const items = filtered.slice(start, start + limit);
+
+    if(items.length === 0) {
+        container.innerHTML = `<div class="text-center py-20 opacity-30 font-bold uppercase text-[10px]">Trống</div>`;
+        updatePagination(0);
+        return;
+    }
+
+    container.innerHTML = items.map(([k, d]) => {
+        const isNo = (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán");
+        const date = d.NgayNhap || d.NgayBan || d.Ngayban || "";
+        
+        let displayName = d.NhaCungCap || d.KhachHang || "N/A";
+        if (tab === 'banhang' && (d.KhachHang || "").toUpperCase().includes("ĐÔI DÉP") && d.ChiNhanh) {
+            displayName = d.ChiNhanh;
+        }
+        const id = d.SoPhieuNhap || d.SoHoaDon || "N/A";
 
         return `
-            <div class="bg-white p-4 rounded-2xl border border-gray-100 card-shadow">
+            <div class="data-card border-l-4 ${tab === 'muahang' ? 'border-l-red-500' : 'border-l-sky-500'}">
                 <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <h3 class="font-bold text-gray-800 text-sm leading-tight">${mainName}</h3>
-                        <p class="text-[10px] text-blue-600 mt-0.5"><i class="fas fa-hashtag text-[8px]"></i> ${subId || 'N/A'}</p>
+                    <div class="flex-1 pr-2">
+                        <h3 class="font-bold text-[13px] uppercase text-slate-900">${displayName}</h3>
+                        <div class="flex gap-2 mt-1 items-center">
+                            <span class="text-[9px] font-black text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100 uppercase">${id}</span>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase">${date}</span>
+                        </div>
                     </div>
-                    <span class="text-[10px] font-bold text-gray-400">${date}</span>
+                    <span class="badge ${isNo ? 'badge-danger' : 'badge-success'}">${isNo ? 'Nợ' : 'Xong'}</span>
                 </div>
                 
-                <div class="space-y-1.5 mb-3">
-                    ${(d.ChiTiet || []).map(i => `
-                        <div class="bg-gray-50 p-2 rounded-lg">
-                            <div class="text-xs text-gray-700 font-medium mb-1">${i.MaSP}</div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-[10px] text-blue-600 font-bold">SL: ${i.SoLuong}</span>
-                                <span class="text-[10px] text-gray-400 italic">Giá: ${(Number(i.GiaNhap || i.DonGia) || 0).toLocaleString()}đ</span>
+                <div class="space-y-2 mb-4">
+                    ${Array.isArray(d.ChiTiet) ? d.ChiTiet.map(i => {
+                        // Lấy giá linh hoạt theo trường dữ liệu hiện có
+                        const gia = Number(i.GiaNhap || i.DonGia || 0);
+                        return `
+                            <div class="flex justify-between items-start py-1.5 border-b border-slate-50 last:border-0">
+                                <div class="flex-1 pr-4">
+                                    <p class="text-[11px] text-slate-600 font-medium leading-tight">${i.MaSP}</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5 italic">Đơn giá: ${gia.toLocaleString()}đ</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-black text-slate-900 text-xs">x${i.SoLuong}</span>
+                                    <p class="text-[10px] font-bold text-slate-500">${(gia * i.SoLuong).toLocaleString()}đ</p>
+                                </div>
                             </div>
-                        </div>
-                    `).join('')}
+                        `;
+                    }).join('') : '<div class="text-[10px] text-slate-400 italic">Không có chi tiết</div>'}
                 </div>
 
-                <div class="flex justify-between items-end pt-2 border-t border-dashed border-gray-100">
-                    <div>
-                        <p class="text-[9px] text-gray-400 font-bold uppercase">${type === 'muahang' ? 'Tổng chi' : 'Tổng thu'}</p>
-                        <p class="text-base font-black ${type==='muahang'?'text-red-600':'text-blue-600'} font-mono">
-                            ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
-                        </p>
-                    </div>
-                    <div class="text-right">
-                        <span class="${payColor} px-2 py-0.5 rounded text-[9px] font-black uppercase">${payLabel}</span>
-                    </div>
+                ${tab === 'banhang' && d.SoHDVAT ? `
+                    <div class="mb-3"><span class="badge badge-warning">VAT: ${d.SoHDVAT}</span></div>
+                ` : ''}
+
+                <div class="flex justify-between items-center bg-slate-50 -mx-4 -mb-4 p-3 border-t border-slate-100">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">${tab === 'muahang' ? 'Tổng chi' : 'Tổng thu'}</span>
+                    <span class="amount ${tab === 'muahang' ? 'text-red-600' : 'text-sky-600'}">${Number(d.ThanhTien || 0).toLocaleString()}đ</span>
                 </div>
             </div>
         `;
     }).join('');
+    updatePagination(filtered.length);
 }
-        window.resetMobileFilter = () => {
-            document.getElementById('mobileSearchInput').value = "";
-            document.getElementById('mobileFromDate').value = "";
-            document.getElementById('mobileToDate').value = "";
-            window.handleMobileFilter();
-        };
 
-        function fetchSanPham(container) {
-            onValue(ref(db, 'products'), (snapshot) => {
-                const prods = snapshot.exists() ? Object.values(snapshot.val()) : [];
-                container.innerHTML = prods.map(p => `<div class="bg-white p-4 rounded-2xl flex items-center gap-4 card-shadow border border-gray-100"><div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">SP</div><div class="flex-1"><h4 class="font-bold text-gray-800 text-sm">${p.name}</h4><p class="text-[10px] text-gray-400">${p.code}</p></div><div class="text-right"><p class="text-blue-600 font-bold text-sm">${(p.cost || 0).toLocaleString()}đ</p></div></div>`).join('');
-            });
+        function updatePagination(total) {
+            const pages = Math.ceil(total / limit);
+            const ctrl = document.getElementById('page-controls');
+            const info = document.getElementById('page-info');
+            if(pages <= 1) { ctrl.innerHTML = ""; info.innerText = total > 0 ? `Tổng ${total} dòng` : ""; return; }
+            let h = "";
+            for(let i=1; i<=pages; i++) {
+                if(i === 1 || i === pages || (i >= page-1 && i <= page+1)) {
+                    h += `<button onclick="setPage(${i})" class="page-btn ${page === i ? 'active' : ''}">${i}</button>`;
+                } else if(i === page-2 || i === page+2) h += `<span class="text-slate-300">...</span>`;
+            }
+            ctrl.innerHTML = h;
+            info.innerText = `Trang ${page} / ${pages} (${total} dòng)`;
         }
 
-        function fetchBaoCao(container) {
-            onValue(ref(db, 'invoices'), (invSnap) => {
-                onValue(ref(db, 'sales'), (saleSnap) => {
-                    let totalIn = 0, totalOut = 0, debtIn = 0, debtOut = 0;
-                    
-                    if(invSnap.exists()) Object.values(invSnap.val()).forEach(d => {
-                        const amt = Number(d.ThanhTien) || 0; totalIn += amt;
-                        if(d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") debtIn += amt;
-                    });
-                    
-                    if(saleSnap.exists()) Object.values(saleSnap.val()).forEach(d => {
-                        const amt = Number(d.ThanhTien) || 0; totalOut += amt;
-                        if(d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") debtOut += amt;
-                    });
-
-                    container.innerHTML = `
-                        <div class="space-y-4">
-                            <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-lg">
-                                <p class="text-xs opacity-80 uppercase font-bold mb-1">Doanh thu bán hàng</p>
-                                <h2 class="text-2xl font-black">${totalOut.toLocaleString()}đ</h2>
-                            </div>
-                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                                <div class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center"><i class="fas fa-arrow-down"></i></div>
-                                <div><p class="text-xs text-gray-400 font-bold uppercase">Tổng chi nhập hàng</p><p class="text-lg font-black text-gray-800">${totalIn.toLocaleString()}đ</p></div>
-                            </div>
-                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                                <div class="w-10 h-10 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center"><i class="fas fa-exclamation-triangle"></i></div>
-                                <div><p class="text-xs text-gray-400 font-bold uppercase">Công nợ khách hàng</p><p class="text-lg font-black text-orange-600">${debtOut.toLocaleString()}đ</p></div>
-                            </div>
-                        </div>`;
-                });
-            });
+        window.setPage = (p) => { page = p; renderItems(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+        function renderBaoCao() {
+    const container = document.getElementById('main-list');
+    
+    // Tính toán số liệu Mua hàng
+    let chi = 0, noMua = 0, donMua = STORE.muahang.length, donMuaNo = 0;
+    STORE.muahang.forEach(([k,d]) => {
+        const amt = Number(d.ThanhTien || 0);
+        chi += amt;
+        if(d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") {
+            noMua += amt;
+            donMuaNo++;
         }
+    });
 
-        window.renderMobileView('muahang');
+    // Tính toán số liệu Bán hàng
+    let thu = 0, noBan = 0, donBan = STORE.banhang.length, donBanNo = 0;
+    STORE.banhang.forEach(([k,d]) => {
+        const amt = Number(d.ThanhTien || 0);
+        thu += amt;
+        if(d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") {
+            noBan += amt;
+            donBanNo++;
+        }
+    });
+
+    container.innerHTML = `
+        <div class="space-y-6 animate-fade-in pb-10">
+            <div class="bg-slate-900 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <div class="absolute -right-4 -top-4 opacity-10 text-6xl"><i class="fas fa-wallet"></i></div>
+                <p class="text-[10px] opacity-60 uppercase font-black tracking-widest mb-1">Lợi nhuận gộp dự kiến</p>
+                <h2 class="text-3xl font-black text-sky-400">${(thu - chi).toLocaleString()}đ</h2>
+                <div class="flex gap-4 mt-4 pt-4 border-t border-white/10 text-[11px]">
+                    <div><span class="opacity-50">Thu:</span> <span class="font-bold">${thu.toLocaleString()}</span></div>
+                    <div><span class="opacity-50">Chi:</span> <span class="font-bold">${chi.toLocaleString()}</span></div>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <h3 class="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Phân tích bán hàng</h3>
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="w-10 h-10 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="text-right">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">Tổng thu</p>
+                            <p class="text-lg font-black text-sky-600">${thu.toLocaleString()}đ</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                        <div>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase">Đơn nợ</p>
+                            <p class="text-sm font-black text-orange-600">${donBanNo} / ${donBan} đơn</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase">Tiền nợ khách</p>
+                            <p class="text-sm font-black text-red-600">${noBan.toLocaleString()}đ</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-orange-500 h-full" style="width: ${(noBan/thu*100) || 0}%"></div>
+                    </div>
+                    <p class="text-[9px] text-slate-400 mt-2 font-medium">Tỷ lệ nợ khách hàng: <span class="font-bold text-slate-600">${((noBan/thu*100) || 0).toFixed(1)}%</span></p>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <h3 class="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Phân tích nhập hàng</h3>
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center"><i class="fas fa-shopping-basket"></i></div>
+                        <div class="text-right">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">Tổng chi</p>
+                            <p class="text-lg font-black text-red-600">${chi.toLocaleString()}đ</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                        <div>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase">Đơn chưa chi</p>
+                            <p class="text-sm font-black text-slate-700">${donMuaNo} / ${donMua} đơn</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase">Công nợ NCC</p>
+                            <p class="text-sm font-black text-orange-600">${noMua.toLocaleString()}đ</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+        changeTab('muahang');
     </script>
 </body>
 </html>
