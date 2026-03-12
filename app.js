@@ -15,8 +15,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// --- BIẾN TOÀN CỤC CHO PHÂN TRANG ---
+let currentPage = { muahang: 1, banhang: 1 };
+const rowsPerPage = 15; 
+let dataStore = { muahang: [], banhang: [] }; // Lưu trữ mảng dữ liệu đã sắp xếp
+
 let availableProducts = [];
 let originalInvoicesData = {};
+window.originalSalesData = {}; 
 
 // --- HÀM TRỢ GIÚP ĐỊNH DẠNG ---
 window.handleMoneyInput = (input) => {
@@ -34,12 +40,53 @@ window.toggleModal = (id) => {
     if (modal) modal.classList.toggle('hidden');
 };
 
+// --- LOGIC PHÂN TRANG CHUYÊN NGHIỆP ---
+window.renderPagination = (type, totalItems) => {
+    const totalPages = Math.ceil(totalItems / rowsPerPage);
+    const container = document.getElementById(`pagination-${type}`);
+    const info = document.getElementById(`total-info-${type}`);
+    if (!container) return;
+
+    if (totalItems === 0) {
+        container.innerHTML = "";
+        info.innerText = "Không có dữ liệu";
+        return;
+    }
+
+    let html = "";
+    // Nút Trước
+    html += `<button onclick="changePage('${type}', ${currentPage[type] - 1})" ${currentPage[type] === 1 ? 'disabled' : ''} class="page-node px-2 w-auto min-w-[32px] disabled:opacity-30">Trước</button>`;
+
+    // Các nút số trang thông minh
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage[type] - 1 && i <= currentPage[type] + 1)) {
+            html += `<button onclick="changePage('${type}', ${i})" class="page-node ${currentPage[type] === i ? 'active' : ''}">${i}</button>`;
+        } else if (i === currentPage[type] - 2 || i === currentPage[type] + 2) {
+            html += `<span class="px-1 text-gray-400">...</span>`;
+        }
+    }
+
+    // Nút Sau
+    html += `<button onclick="changePage('${type}', ${currentPage[type] + 1})" ${currentPage[type] >= totalPages ? 'disabled' : ''} class="page-node px-2 w-auto min-w-[32px] disabled:opacity-30">Sau</button>`;
+
+    container.innerHTML = html;
+    info.innerText = `Tổng cộng ${totalItems} đơn | Trang ${currentPage[type]}/${totalPages}`;
+};
+
+window.changePage = (type, page) => {
+    const totalPages = Math.ceil(dataStore[type].length / rowsPerPage);
+    if (page < 1 || page > totalPages) return;
+    currentPage[type] = page;
+    if (type === 'muahang') renderInvoiceTable();
+    else renderSalesTable();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 // --- QUẢN LÝ CHI PHÍ LƯƠNG ---
 window.saveSalary = async () => {
     const key = document.getElementById('edit_salary_key').value;
     const staff = document.getElementById('s_staff').value.trim();
     const amount = parseInt(document.getElementById('s_amount').value) || 0;
-
     if (!staff) return alert("Vui lòng nhập tên nhân viên hoặc bộ phận!");
     if (amount <= 0) return alert("Vui lòng nhập số tiền lương hợp lệ!");
 
@@ -63,10 +110,7 @@ window.saveSalary = async () => {
             alert("Đã lưu phiếu lương mới!");
         }
         window.toggleModal('modal-luong');
-    } catch (error) {
-        console.error(error);
-        alert("Có lỗi xảy ra khi lưu dữ liệu!");
-    }
+    } catch (error) { console.error(error); alert("Có lỗi xảy ra!"); }
 };
 
 window.editSalary = async (key) => {
@@ -80,15 +124,8 @@ window.editSalary = async (key) => {
         document.getElementById('s_note').value = d.note || '';
         document.getElementById('s_amount').value = d.amount;
         document.getElementById('s_status').value = d.status;
-        
         document.getElementById('salaryModalTitle').innerText = "Chỉnh sửa phiếu lương";
         window.toggleModal('modal-luong');
-    }
-};
-
-window.deleteSalary = async (key) => {
-    if (confirm("Bạn có chắc chắn muốn xóa bản ghi lương này?")) {
-        await remove(ref(db, `salaries/${key}`));
     }
 };
 
@@ -97,46 +134,34 @@ window.saveNCC = async () => {
     const key = document.getElementById('edit_ncc_key')?.value;
     const name = document.getElementById('ncc_name').value.trim();
     if (!name) return alert("Vui lòng nhập tên!");
-
-    const data = {
-        name,
-        phone: document.getElementById('ncc_phone').value,
-        bank: document.getElementById('ncc_bank').value,
-        address: document.getElementById('ncc_address').value,
-    };
-
-    if (key) {
-        await update(ref(db, `vendors/${key}`), data);
-    } else {
-        const codesnapshot = await get(ref(db, 'vendors'));
-        let newCode = "NCC001";
-        if (codesnapshot.exists()) {
-            const codes = Object.values(codesnapshot.val()).map(v => parseInt(v.code?.replace("NCC", "") || 0));
-            newCode = "NCC" + (Math.max(...codes) + 1).toString().padStart(3, '0');
+    const data = { name, phone: document.getElementById('ncc_phone').value, bank: document.getElementById('ncc_bank').value };
+    if (key) await update(ref(db, `vendors/${key}`), data);
+    else {
+        const snap = await get(ref(db, 'vendors'));
+        let nextCode = "NCC001";
+        if (snap.exists()) {
+            const codes = Object.values(snap.val()).map(v => parseInt(v.code?.replace("NCC", "") || 0));
+            nextCode = "NCC" + (Math.max(...codes) + 1).toString().padStart(3, '0');
         }
-        data.code = newCode;
-        data.createdAt = Date.now();
+        data.code = nextCode; data.createdAt = Date.now();
         await push(ref(db, 'vendors'), data);
     }
-    alert("Thành công!");
-    window.toggleModal('modal-ncc');
+    alert("Thành công!"); window.toggleModal('modal-ncc');
 };
 
 // --- QUẢN LÝ SẢN PHẨM ---
 window.saveProduct = async () => {
     const name = document.getElementById('p_name').value;
     if (!name) return alert("Nhập tên SP!");
-    const snapshot = await get(ref(db, 'products'));
-    let newCode = "SP001";
-    if (snapshot.exists()) {
-        const codes = Object.values(snapshot.val()).map(p => parseInt(p.code?.replace("SP", "") || 0));
-        newCode = "SP" + (Math.max(...codes) + 1).toString().padStart(3, '0');
+    const snap = await get(ref(db, 'products'));
+    let nextCode = "SP001";
+    if (snap.exists()) {
+        const codes = Object.values(snap.val()).map(p => parseInt(p.code?.replace("SP", "") || 0));
+        nextCode = "SP" + (Math.max(...codes) + 1).toString().padStart(3, '0');
     }
     await push(ref(db, 'products'), {
-        code: newCode, name,
-        cost: parseInt(document.getElementById('p_cost').value) || 0,
-        unit: document.getElementById('p_unit').value,
-        stock: parseInt(document.getElementById('p_stock').value) || 0
+        code: nextCode, name, cost: parseInt(document.getElementById('p_cost').value) || 0,
+        unit: document.getElementById('p_unit').value, stock: 0
     });
     window.toggleModal('modal-sanpham');
 };
@@ -144,7 +169,6 @@ window.saveProduct = async () => {
 // --- HÀM CẬP NHẬT BÁO CÁO ---
 function updateGeneralReport(invoicesData) {
     originalInvoicesData = invoicesData; 
-    
     const vendorSelectFilter = document.getElementById('reportVendorFilter');
     if (vendorSelectFilter) {
         const currentVal = vendorSelectFilter.value;
@@ -154,349 +178,407 @@ function updateGeneralReport(invoicesData) {
             vendorSelectFilter.innerHTML += `<option value="${v}" ${v === currentVal ? 'selected' : ''}>${v}</option>`;
         });
     }
-
     applyReportFilter();
 }
 
-window.applyReportFilter = () => {
+window.applyReportFilter = async () => {
+    if (!window.originalSalesData || Object.keys(window.originalSalesData).length === 0) {
+        const salesSnapshot = await get(ref(db, 'sales'));
+        if (salesSnapshot.exists()) window.originalSalesData = salesSnapshot.val();
+    }
+    const invoices = originalInvoicesData || {};
+    const sales = window.originalSalesData || {};
     const fromDate = document.getElementById('reportFromDate')?.value;
     const toDate = document.getElementById('reportToDate')?.value;
     const selectedVendor = document.getElementById('reportVendorFilter')?.value;
+    const searchQuery = document.getElementById('reportCustomerSearch')?.value?.toLowerCase()?.trim() || "";
 
     let totalChi = 0, totalDon = 0, totalNo = 0;
     let vendorSummary = {};
+    let ddRevenue = 0, ddDebt = 0, ddUnpaidCount = 0;
+    let ddRowsHtml = "";
 
     const toIso = (str) => {
         if (!str || !str.includes('/')) return str;
         const p = str.split('/'); return `${p[2]}-${p[1]}-${p[0]}`;
     };
 
-    Object.entries(originalInvoicesData).forEach(([key, d]) => {
-        const invoiceDateIso = toIso(d.NgayNhap);
-        const matchFrom = !fromDate || invoiceDateIso >= fromDate;
-        const matchTo = !toDate || invoiceDateIso <= toDate;
-        const matchVendor = !selectedVendor || d.NhaCungCap === selectedVendor;
-
-        if (matchFrom && matchTo && matchVendor) {
+    Object.values(invoices).forEach(d => {
+        const dateIso = toIso(d.NgayNhap);
+        if ((!fromDate || dateIso >= fromDate) && (!toDate || dateIso <= toDate) && (!selectedVendor || d.NhaCungCap === selectedVendor)) {
             const amount = parseInt(d.ThanhTien) || 0;
-            totalChi += amount;
-            totalDon++;
-            
-            // Cập nhật logic lọc công nợ báo cáo
-            if (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") {
-                totalNo += amount;
-            }
-
+            totalChi += amount; totalDon++;
+            if (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán") totalNo += amount;
             const vName = d.NhaCungCap || "Chưa rõ";
-            if (!vendorSummary[vName]) {
-                vendorSummary[vName] = { qty: 0, sum: 0, hasPendingInvoice: false };
-            }
-            vendorSummary[vName].qty++;
-            vendorSummary[vName].sum += amount;
-            if (d.TinhTrangHoaDon === "Chưa Nhận HĐ") {
-                vendorSummary[vName].hasPendingInvoice = true;
-            }
+            if (!vendorSummary[vName]) vendorSummary[vName] = { qty: 0, sum: 0, bad: false };
+            vendorSummary[vName].qty++; vendorSummary[vName].sum += amount;
+            if (d.TinhTrangHoaDon === "Chưa Nhận HĐ") vendorSummary[vName].bad = true;
         }
     });
 
-    if (document.getElementById('report-total-amount')) document.getElementById('report-total-amount').innerText = totalChi.toLocaleString('vi-VN') + "đ";
-    if (document.getElementById('report-total-invoices')) document.getElementById('report-total-invoices').innerText = totalDon;
-    if (document.getElementById('report-unpaid-amount')) document.getElementById('report-unpaid-amount').innerText = totalNo.toLocaleString('vi-VN') + "đ";
+    Object.values(sales).forEach(s => {
+        const khachHang = s.KhachHang || "";
+        const chiNhanh = s.ChiNhanh || "";
+        const dateIso = toIso(s.NgayBan);
+        const displayKH = (khachHang.trim().toUpperCase() === "ĐÔI DÉP" && chiNhanh) ? chiNhanh : khachHang;
+        const matchSearch = !searchQuery || displayKH.toLowerCase().includes(searchQuery);
 
-    const reportTbody = document.getElementById('report-vendor-body');
-    if (reportTbody) {
-        reportTbody.innerHTML = Object.entries(vendorSummary).map(([name, stat]) => `
-            <tr class="border-b hover:bg-gray-50 text-sm">
-                <td class="p-4 font-bold">${name}</td>
-                <td class="p-4 text-center">${stat.qty} đơn</td>
-                <td class="p-4 text-right font-bold text-blue-600">${stat.sum.toLocaleString()}đ</td>
-                <td class="p-4 text-center">
-                    ${stat.hasPendingInvoice ? '<span class="text-red-500 text-xs font-bold">⚠️ Thiếu HĐ</span>' : '<span class="text-green-500 text-xs font-bold">✅ Đủ HĐ</span>'}
-                </td>
-            </tr>`).join('');
-    }
+        if (khachHang.toLowerCase().includes("đôi dép") && (!fromDate || dateIso >= fromDate) && (!toDate || dateIso <= toDate) && matchSearch) {
+            const amount = parseInt(s.ThanhTien) || 0;
+            ddRevenue += amount;
+            const isNo = (s.HinhThucThanhToan === "Công Nợ" || s.HinhThucThanhToan === "Chưa thanh toán");
+            if (isNo) { ddDebt += amount; ddUnpaidCount++; }
+            ddRowsHtml += `<tr class="border-b text-sm"><td class="p-4">${s.NgayBan || ''}</td><td class="p-4"><div class="font-bold">${displayKH}</div></td><td class="p-4 text-right font-bold text-blue-600">${amount.toLocaleString()}đ</td><td class="p-4 text-center"><span class="px-2 py-1 rounded text-[10px] font-bold ${isNo ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">${s.HinhThucThanhToan}</span></td></tr>`;
+        }
+    });
+
+    const setInner = (id, val) => { if (document.getElementById(id)) document.getElementById(id).innerText = val; };
+    setInner('report-total-amount', totalChi.toLocaleString('vi-VN') + "đ");
+    setInner('report-total-invoices', totalDon);
+    setInner('report-unpaid-amount', totalNo.toLocaleString('vi-VN') + "đ");
+    setInner('dd-total-revenue', ddRevenue.toLocaleString('vi-VN') + "đ");
+    setInner('dd-total-debt', ddDebt.toLocaleString('vi-VN') + "đ");
+    setInner('dd-unpaid-count', `${ddUnpaidCount} đơn chưa thanh toán`);
+    if (document.getElementById('report-vendor-body')) document.getElementById('report-vendor-body').innerHTML = Object.entries(vendorSummary).map(([name, stat]) => `<tr class="border-b text-sm"><td class="p-4 font-bold">${name}</td><td class="p-4 text-center">${stat.qty}</td><td class="p-4 text-right font-bold text-blue-600">${stat.sum.toLocaleString()}đ</td><td class="p-4 text-center">${stat.bad ? '⚠️ Thiếu HĐ' : '✅ Đủ'}</td></tr>`).join('');
+    if (document.getElementById('dd-detail-body')) document.getElementById('dd-detail-body').innerHTML = ddRowsHtml || '<tr><td colspan="4" class="p-4 text-center text-gray-400 italic">Không có dữ liệu phù hợp</td></tr>';
 };
 
-window.resetReportFilter = () => {
-    if (document.getElementById('reportFromDate')) document.getElementById('reportFromDate').value = "";
-    if (document.getElementById('reportToDate')) document.getElementById('reportToDate').value = "";
-    if (document.getElementById('reportVendorFilter')) document.getElementById('reportVendorFilter').value = "";
-    window.applyReportFilter();
+// --- HÀM RENDER BẢNG CHÍNH ---
+window.renderInvoiceTable = () => {
+    const invTbody = document.getElementById('invoiceTableBody');
+    if (!invTbody) return;
+    const start = (currentPage.muahang - 1) * rowsPerPage;
+    const paginated = dataStore.muahang.slice(start, start + rowsPerPage);
+
+    invTbody.innerHTML = paginated.map(([key, d]) => {
+        const rawStatus = d.HinhThucThanhToan || "";
+        const isPaid = (rawStatus !== "Chưa thanh toán" && rawStatus !== "Công Nợ");
+        const payLabel = isPaid ? "Đã thanh toán" : "Chưa thanh toán";
+        const badgeClass = isPaid ? 'badge-paid' : 'badge-unpaid';
+        const dotClass = isPaid ? 'dot-success' : 'dot-danger';
+        
+        let driveLink = (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') ? d.LinkHoaDon.Url : d.LinkHoaDon;
+        const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-green-500 hover:text-green-700 transition"><i class="fab fa-google-drive"></i></a>` : "";
+        
+        return `
+        <tr class="hover:bg-slate-50/80 transition-colors">
+            <td class="p-4 text-slate-500 font-medium align-top">${d.NgayNhap || ''}</td>
+            <td class="p-4 align-top">
+                <div class="font-bold text-slate-800 flex items-center gap-2">${d.NhaCungCap || ''} ${driveIcon}</div>
+                <div class="text-[10px] text-blue-600 mt-1 font-bold bg-blue-50 px-2 py-0.5 rounded-md w-fit border border-blue-100">
+                    ID: ${d.SoPhieuNhap || 'N/A'}
+                </div>
+            </td>
+            <td class="p-4 align-top">
+                <div class="flex flex-col gap-1.5">
+                    ${(d.ChiTiet || []).map((i, idx) => `
+                        <div class="text-[12px] text-slate-600 border-l-2 border-slate-200 pl-2 py-0.5">
+                            <span class="font-semibold text-slate-800">${i.MaSP}</span>
+                            <span class="text-slate-400 mx-1">•</span>
+                            <span class="text-blue-600 font-bold">x${i.SoLuong}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </td>
+            <td class="p-4 text-right align-top amount-highlight">
+                ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
+            </td>
+            <td class="p-4 text-center align-top">
+                <span class="px-2 py-1 rounded-lg text-[10px] font-bold border ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-slate-400 bg-slate-50 border-slate-200'}">
+                    ${d.TinhTrangHoaDon || 'Chưa nhận'}
+                </span>
+            </td>
+            <td class="p-4 text-center align-top">
+                <button onclick="toggleInvoicePayment('${key}', '${rawStatus}')" class="status-badge ${badgeClass} transition-transform active:scale-95">
+                    <span class="dot ${dotClass}"></span>
+                    ${payLabel}
+                </button>
+            </td>
+            <td class="p-4 text-center align-top">
+                <button onclick="deleteInvoice('${key}')" class="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                    <i class="fas fa-trash-alt text-sm"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+    renderPagination('muahang', dataStore.muahang.length);
+};
+
+window.renderSalesTable = () => {
+    const salesTbody = document.getElementById('salesTableBody');
+    if (!salesTbody) return;
+    const start = (currentPage.banhang - 1) * rowsPerPage;
+    const paginated = dataStore.banhang.slice(start, start + rowsPerPage);
+
+    salesTbody.innerHTML = paginated.map(([key, d]) => {
+        const rawStatus = d.HinhThucThanhToan || "";
+        const isPaid = !(rawStatus === "Công Nợ" || rawStatus === "Chưa thanh toán");
+        const payLabel = isPaid ? "Đã thanh toán" : "Chưa thanh toán";
+        const badgeClass = isPaid ? 'badge-paid' : 'badge-unpaid';
+        const dotClass = isPaid ? 'dot-success' : 'dot-danger';
+        
+        let driveIcon = "";
+        try {
+            let dd = d.LinkHoaDon;
+            if (typeof dd === 'string' && dd.startsWith('{')) dd = JSON.parse(dd);
+            if (dd && dd.Url) driveIcon = `<a href="${dd.Url}" target="_blank" class="text-blue-500 hover:text-blue-700 transition"><i class="fab fa-google-drive"></i></a>`;
+        } catch (e) { driveIcon = ""; }
+
+        const kh = d.KhachHang || '', cn = d.ChiNhanh || '', shd = d.SoHoaDon || 'N/A', svat = d.SoHDVAT || 'Chưa có';
+        const isStrictDoiDep = kh.trim().toUpperCase() === "ĐÔI DÉP";
+        const disp = (isStrictDoiDep && cn) ? cn : kh;
+
+        return `
+        <tr class="hover:bg-slate-50/80 transition-colors">
+            <td class="p-4 text-slate-500 font-medium align-top">${d.NgayBan || d.Ngayban || '---'}</td>
+            <td class="p-4 align-top">
+                <div class="font-bold text-slate-800 flex items-center gap-2">${disp} ${driveIcon}</div>
+                <div class="flex flex-col gap-1 mt-2">
+                    ${isStrictDoiDep && cn ? `<div class="text-[10px] text-slate-400 italic font-medium">Hệ thống: ${kh}</div>` : ''}
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-mono">Đơn: ${shd}</span>
+                        ${kh.toLowerCase().includes("đôi dép") ? `
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[10px] text-orange-600 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">VAT: ${svat}</span>
+                                <button onclick="updateVatInvoice('${key}', '${svat}')" class="text-[10px] text-blue-600 hover:underline font-bold">Sửa</button>
+                            </div>` : ''}
+                    </div>
+                </div>
+            </td>
+            <td class="p-4 align-top">
+                <div class="flex flex-col gap-1.5">
+                    ${(d.ChiTiet || []).map(i => `
+                        <div class="text-[12px] text-slate-600 border-l-2 border-slate-200 pl-2 py-0.5">
+                            <span class="font-medium text-slate-800">${i.MaSP}</span>
+                            <div class="flex gap-2 text-[10px] font-bold">
+                                <span class="text-blue-600">x${i.SoLuong}</span>
+                                <span class="text-slate-400 italic">${(Number(i.DonGia || i.GiaNhap) || 0).toLocaleString()}đ</span>
+                            </div>
+                        </div>`).join('')}
+                </div>
+            </td>
+            <td class="p-4 text-right align-top amount-highlight text-blue-600">
+                ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
+            </td>
+            <td class="p-4 text-center align-top">
+    ${(() => {
+        // Chuẩn hóa dữ liệu đầu vào: nếu trống thì coi là chưa xuất
+        const statusRaw = d.TinhTrangHoaDon || 'Chưa xuất HĐ';
+        
+        // Kiểm tra logic: Nếu chứa chữ "Đã" thì tính là trạng thái hoàn thành
+        const isCompleted = statusRaw.includes('Đã');
+
+        return `
+            <span class="status-badge ${isCompleted ? 'badge-paid' : 'badge-unpaid'} shadow-sm">
+                <i class="fas ${isCompleted ? 'fa-check-double' : 'fa-history'} mr-1.5"></i>
+                ${statusRaw}
+            </span>
+        `;
+    })()}
+</td>
+            <td class="p-4 text-center align-top">
+                <button onclick="toggleSalePayment('${key}', '${rawStatus}')" class="status-badge ${badgeClass} transition-transform active:scale-95">
+                    <span class="dot ${dotClass}"></span>
+                    ${payLabel}
+                </button>
+            </td>
+            <td class="p-4 text-center align-top">
+                <button onclick="deleteSale('${key}')" class="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                    <i class="fas fa-trash-alt text-sm"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+    renderPagination('banhang', dataStore.banhang.length);
 };
 
 // --- KHỞI TẠO ỨNG DỤNG ---
 function initApp() {
+    const parseDateLocal = (dateStr) => {
+        if (!dateStr || typeof dateStr !== 'string') return 0;
+        if (dateStr.includes('/')) {
+            const p = dateStr.split('/');
+            return parseInt(p[2] + p[1].padStart(2, '0') + p[0].padStart(2, '0'));
+        }
+        return new Date(dateStr).getTime() || 0;
+    };
+
+    onValue(ref(db, 'invoices'), (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            updateGeneralReport(data);
+            dataStore.muahang = Object.entries(data).sort((a, b) => parseDateLocal(b[1].NgayNhap) - parseDateLocal(a[1].NgayNhap));
+            renderInvoiceTable();
+        }
+    });
+
+    onValue(ref(db, 'sales'), (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            window.originalSalesData = data; 
+            dataStore.banhang = Object.entries(data).sort((a, b) => {
+                const dateA = a[1].NgayBan || a[1].Ngayban || "";
+                const dateB = b[1].NgayBan || b[1].Ngayban || "";
+                return parseDateLocal(dateB) - parseDateLocal(dateA);
+            });
+            renderSalesTable();
+            applyReportFilter();
+        }
+    });
+
     onValue(ref(db, 'products'), (snapshot) => {
         const prodTbody = document.getElementById('productTableBody');
         if (!prodTbody) return;
-        prodTbody.innerHTML = ""; availableProducts = [];
+        prodTbody.innerHTML = "";
         if (snapshot.exists()) {
             Object.entries(snapshot.val()).forEach(([key, p]) => {
-                availableProducts.push({ key, ...p });
-                prodTbody.innerHTML += `<tr class="border-b text-sm"><td class="p-4 font-bold text-blue-600">${p.code || ''}</td><td class="p-4">${p.name}</td><td class="p-4 text-right">${(p.cost || 0).toLocaleString()}đ</td><td class="p-4 text-center">${p.unit}</td><td class="p-4 text-center font-bold">${p.stock}</td><td class="p-4 text-center"><button class="text-red-600" onclick="remove(ref(db, 'products/${key}'))"><i class="fas fa-trash"></i></button></td></tr>`;
+                prodTbody.innerHTML += `<tr class="border-b text-sm"><td class="p-4 font-bold text-blue-600">${p.code || ''}</td><td class="p-4">${p.name}</td><td class="p-4 text-right">${(p.cost || 0).toLocaleString()}đ</td><td class="p-4 text-center">${p.unit}</td><td class="p-4 text-center font-bold">${p.stock}</td><td class="p-4 text-center"><button class="text-red-600" onclick="deleteProduct('${key}')"><i class="fas fa-trash"></i></button></td></tr>`;
             });
         }
     });
 
     onValue(ref(db, 'vendors'), (snapshot) => {
         const nccTbody = document.getElementById('nccTableBody');
-        if (!nccTbody) return;
-        nccTbody.innerHTML = "";
-        if (snapshot.exists()) {
-            Object.entries(snapshot.val()).forEach(([key, v]) => {
-                nccTbody.innerHTML += `<tr class="border-b hover:bg-gray-50 text-sm"><td class="p-4 font-bold">${v.code || ''}</td><td class="p-4"><b>${v.name}</b></td><td class="p-4">${v.phone || '-'}</td><td class="p-4 font-mono text-xs">${v.bank || '-'}</td><td class="p-4 text-center"><button onclick="remove(ref(db, 'vendors/${key}'))" class="text-red-500"><i class="fas fa-trash"></i></button></td></tr>`;
-            });
+        if (nccTbody && snapshot.exists()) {
+            nccTbody.innerHTML = Object.entries(snapshot.val()).map(([key, v]) => `<tr class="border-b hover:bg-gray-50 text-sm"><td class="p-4 font-bold">${v.code || ''}</td><td class="p-4"><b>${v.name}</b></td><td class="p-4">${v.phone || '-'}</td><td class="p-4 font-mono text-xs">${v.bank || '-'}</td><td class="p-4 text-center"><button onclick="remove(ref(db, 'vendors/${key}'))" class="text-red-500"><i class="fas fa-trash"></i></button></td></tr>`).join('');
         }
     });
 
-    const parseDate = (dateStr) => {
-        if (!dateStr) return 0;
-        const parts = dateStr.split('/');
-        if (parts.length === 3) return parseInt(parts[2] + parts[1] + parts[0]); 
-        const d = new Date(dateStr);
-        return isNaN(d.getTime()) ? 0 : d.getTime();
-    };
-
-    // 3. LẮNG NGHE HÓA ĐƠN NHẬP
-    onValue(ref(db, 'invoices'), (snapshot) => {
-    const invTbody = document.getElementById('invoiceTableBody'); 
-    if (!invTbody) return;
-    invTbody.innerHTML = "";
-    
-    if (snapshot.exists()) {
-        const data = snapshot.val(); 
-        updateGeneralReport(data);
-        const invoiceArray = Object.entries(data);
-        invoiceArray.sort((a, b) => parseDate(b[1].NgayNhap) - parseDate(a[1].NgayNhap));
-        
-        invoiceArray.forEach(([key, d]) => {
-            // LOGIC THANH TOÁN
-            let rawStatus = d.HinhThucThanhToan || "";
-            let payLabel = "";
-            let payColor = "";
-            
-            if (rawStatus === "Công Nợ" || rawStatus === "Chưa thanh toán") {
-                payLabel = "Chưa thanh toán"; payColor = "bg-red-100 text-red-700";
-            } else if (rawStatus === "Tiền Mặt" || rawStatus === "Chuyển Khoản" || rawStatus === "Đã thanh toán") {
-                payLabel = "Đã thanh toán"; payColor = "bg-green-100 text-green-700";
-            } else {
-                payLabel = rawStatus || "N/A"; payColor = "bg-gray-100 text-gray-700";
-            }
-
-            let driveLink = (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') ? d.LinkHoaDon.Url : d.LinkHoaDon;
-            const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive"></i></a>` : "";
-            
-            // --- PHẦN HIỂN THỊ HÀNG TRONG BẢNG ---
-            invTbody.innerHTML += `
-                <tr class="border-b text-sm hover:bg-gray-50">
-                    <td class="p-4 text-gray-600 align-top">${d.NgayNhap || ''}</td>
-                    
-                    <td class="p-4 align-top">
-                        <div class="font-bold text-gray-800 flex items-center gap-1">${d.NhaCungCap || ''} ${driveIcon}</div>
-                        <div class="text-[11px] text-blue-600 mt-1 font-medium bg-blue-50 px-1.5 py-0.5 rounded w-fit">
-                            <i class="fas fa-hashtag text-[9px]"></i> ${d.SoPhieuNhap || 'N/A'}
-                        </div>
-                    </td>
-
-                    <td class="p-4 text-xs text-gray-600 align-top">
-                        <div class="flex flex-col gap-1.5">
-                            ${(d.ChiTiet || []).map((i, idx) => `
-                                <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
-                                    <span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span>
-                                    <div class="flex flex-col">
-                                        <span class="font-medium text-gray-800">${i.MaSP}</span>
-                                        <div class="flex gap-2 mt-0.5">
-                                            <span class="text-[10px] text-blue-500 font-bold">SL: ${i.SoLuong}</span>
-                                            <span class="text-[10px] text-gray-400 italic">Giá: ${(Number(i.GiaNhap) || 0).toLocaleString()}đ</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </td>
-
-                    <td class="p-4 font-mono font-bold text-red-600 text-right align-top">
-                        ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
-                    </td>
-                    
-                    <td class="p-4 text-center align-top">
-                        <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">
-                            ${d.TinhTrangHoaDon || 'Chưa nhận'}
-                        </span>
-                    </td>
-                    
-                    <td class="p-4 text-center align-top">
-                        <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${payLabel}</span>
-                    </td>
-                    
-                    <td class="p-4 text-center align-top">
-                        <button onclick="deleteInvoice('${key}')" class="text-red-300 hover:text-red-600 transition">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>`;
-        });
-        if (typeof window.filterInvoices === 'function') window.filterInvoices();
-    }
-});
-
-    // --- LẮNG NGHE DỮ LIỆU BÁN HÀNG (FIXED LOGIC THANH TOÁN & LINK DRIVE) ---
-    onValue(ref(db, 'sales'), (snapshot) => {
-    const salesTbody = document.getElementById('salesTableBody');
-    if (!salesTbody) return;
-    salesTbody.innerHTML = "";
-    if (snapshot.exists()) {
-        const data = snapshot.val();
-        const salesArray = Object.entries(data);
-        // Sắp xếp ngày bán mới nhất lên đầu
-        salesArray.sort((a, b) => parseDate(b[1].NgayBan) - parseDate(a[1].NgayBan));
-        
-        salesArray.forEach(([key, d]) => {
-            // SỬA LOGIC THANH TOÁN KHỚP FIREBASE
-            let rawStatus = d.HinhThucThanhToan || "";
-            let payLabel = "";
-            let payColor = "";
-            
-            if (rawStatus === "Công Nợ" || rawStatus === "Chưa thanh toán") {
-                payLabel = "Chưa thanh toán"; payColor = "bg-red-100 text-red-700";
-            } else {
-                payLabel = "Đã thanh toán"; payColor = "bg-green-100 text-green-700";
-            }
-
-            // XỬ LÝ LINK HOA DON DANG JSON {"Url":"","LinkText":""}
-            let driveIcon = "";
-            try {
-                let driveData = d.LinkHoaDon;
-                if (typeof driveData === 'string' && driveData.startsWith('{')) driveData = JSON.parse(driveData);
-                if (driveData && driveData.Url) {
-                    driveIcon = `<a href="${driveData.Url}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive text-[10px]"></i></a>`;
-                } else if (typeof driveData === 'string' && driveData.startsWith('http')) {
-                    driveIcon = `<a href="${driveData}" target="_blank" class="text-blue-500 ml-1"><i class="fab fa-google-drive text-[10px]"></i></a>`;
-                }
-            } catch (e) { driveIcon = ""; }
-
-            salesTbody.innerHTML += `
-                <tr class="border-b text-sm hover:bg-gray-50">
-                    <td class="p-4 text-gray-600 align-top">${d.NgayBan || ''}</td>
-                    <td class="p-4 align-top">
-                        <div class="font-bold text-gray-800 flex items-center gap-1">${d.KhachHang || ''} ${driveIcon}</div>
-                        <div class="text-[11px] text-green-600 mt-1 font-medium bg-green-50 px-1.5 py-0.5 rounded w-fit"><i class="fas fa-file-invoice text-[9px]"></i> ${d.SoHoaDon || 'N/A'}</div>
-                    </td>
-                    <td class="p-4 text-xs text-gray-600 align-top">
-                        <div class="flex flex-col gap-1.5">
-                            ${(d.ChiTiet || []).map((i, idx) => `
-                                <div class="flex items-start gap-2 border-l-2 border-gray-100 pl-2">
-                                    <span class="text-gray-300 font-mono text-[10px] mt-0.5">${idx + 1}</span>
-                                    <div class="flex flex-col">
-                                        <span class="font-medium text-gray-800">${i.MaSP}</span>
-                                        <div class="flex gap-2 mt-0.5">
-                                            <span class="text-[10px] text-blue-500 font-bold">SL: ${i.SoLuong}</span>
-                                            <span class="text-[10px] text-gray-400 italic">Giá: ${(Number(i.DonGia || i.GiaNhap) || 0).toLocaleString()}đ</span>
-                                        </div>
-                                    </div>
-                                </div>`).join('')}
-                        </div>
-                    </td>
-                    <td class="p-4 font-mono font-bold text-blue-600 text-right align-top">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</td>
-                    <td class="p-4 text-center align-top">
-                        <span class="px-2 py-1 rounded text-[10px] font-bold ${d.TinhTrangHoaDon === 'Đã nhận HĐ' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}">${d.TinhTrangHoaDon || 'N/A'}</span>
-                    </td>
-                    <td class="p-4 text-center align-top">
-                        <span class="${payColor} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${payLabel}</span>
-                    </td>
-                    <td class="p-4 text-center align-top">
-                        <button onclick="deleteSale('${key}')" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>`;
-        });
-        if (typeof window.filterSales === 'function') window.filterSales();
-    }
-});
-
     onValue(ref(db, 'salaries'), (snapshot) => {
         const salaryTbody = document.getElementById('salaryTableBody');
-        if (!salaryTbody) return;
-        salaryTbody.innerHTML = "";
-        if (snapshot.exists()) {
-            Object.entries(snapshot.val()).reverse().forEach(([key, s]) => {
+        if (salaryTbody && snapshot.exists()) {
+            salaryTbody.innerHTML = Object.entries(snapshot.val()).reverse().map(([key, s]) => {
                 const statusColor = s.status === "Đã thanh toán" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
-                salaryTbody.innerHTML += `<tr class="border-b text-sm hover:bg-gray-50"><td class="p-4 font-medium">${s.month}/${s.year}</td><td class="p-4 font-bold text-gray-800">${s.staff}</td><td class="p-4 text-xs text-gray-500 max-w-[200px] truncate">${s.note || ''}</td><td class="p-4 text-right font-mono font-bold text-blue-600">${(s.amount || 0).toLocaleString()}đ</td><td class="p-4 text-center"><span class="${statusColor} px-2 py-1 rounded text-xs font-bold">${s.status}</span></td><td class="p-4 text-center"><button onclick="editSalary('${key}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button><button onclick="remove(ref(db, 'salaries/${key}'))" class="text-red-600"><i class="fas fa-trash"></i></button></td></tr>`;
-            });
+                return `<tr class="border-b text-sm hover:bg-gray-50"><td class="p-4 font-medium">${s.month}/${s.year}</td><td class="p-4 font-bold text-gray-800">${s.staff}</td><td class="p-4 text-xs text-gray-500 max-w-[200px] truncate">${s.note || ''}</td><td class="p-4 text-right font-mono font-bold text-blue-600">${(s.amount || 0).toLocaleString()}đ</td><td class="p-4 text-center"><span class="${statusColor} px-2 py-1 rounded text-xs font-bold">${s.status}</span></td><td class="p-4 text-center"><button onclick="editSalary('${key}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button><button onclick="deleteSalary('${key}')" class="text-red-600"><i class="fas fa-trash"></i></button></td></tr>`;
+            }).join('');
         }
     });
 }
 
 initApp();
 
+// --- ĐĂNG KÝ HÀM TOÀN CỤC ---
+window.deleteInvoice = (key) => { if (confirm("Xóa đơn mua hàng này?")) remove(ref(db, `invoices/${key}`)); };
+window.deleteSale = (key) => { if (confirm("Xóa đơn bán hàng này?")) remove(ref(db, `sales/${key}`)); };
+window.deleteSalary = (key) => { if (confirm("Xóa phiếu lương này?")) remove(ref(db, `salaries/${key}`)); };
+window.deleteProduct = (key) => { if (confirm("Xóa sản phẩm này?")) remove(ref(db, `products/${key}`)); };
 
-// Hàm xóa đơn mua hàng
-window.deleteInvoice = (key) => {
-    if (confirm("Bạn có chắc chắn muốn xóa đơn mua hàng này?")) {
-        const itemRef = ref(db, `invoices/${key}`);
-        remove(itemRef)
-            .then(() => alert("Đã xóa đơn mua hàng thành công!"))
-            .catch((error) => alert("Lỗi khi xóa: " + error.message));
-    }
+window.toggleInvoicePayment = (key, cur) => {
+    const next = (cur === "Chưa thanh toán" || cur === "Công Nợ") ? "Đã thanh toán" : "Chưa thanh toán";
+    if (confirm(`Chuyển trạng thái sang: ${next.toUpperCase()}?`)) update(ref(db, `invoices/${key}`), { HinhThucThanhToan: next });
 };
 
-// Hàm xóa đơn bán hàng
-window.deleteSale = (key) => {
-    if (confirm("Bạn có chắc chắn muốn xóa đơn bán hàng này?")) {
-        const itemRef = ref(db, `sales/${key}`);
-        remove(itemRef)
-            .then(() => alert("Đã xóa đơn bán hàng thành công!"))
-            .catch((error) => alert("Lỗi khi xóa: " + error.message));
-    }
+window.toggleSalePayment = (key, cur) => {
+    const next = (cur === "Chưa thanh toán" || cur === "Công Nợ") ? "Đã thanh toán" : "Chưa thanh toán";
+    if (confirm(`Chuyển trạng thái sang: ${next.toUpperCase()}?`)) update(ref(db, `sales/${key}`), { HinhThucThanhToan: next });
 };
 
-// --- LOGIC LỌC TÌM KIẾM ĐA NĂNG (MUA HÀNG) ---
+window.updateVatInvoice = (key, currentVat) => {
+    const newVat = prompt("Nhập Số Hóa Đơn VAT:", currentVat === 'Chưa có' ? "" : currentVat);
+    if (newVat !== null) update(ref(db, `sales/${key}`), { SoHDVAT: newVat }).then(() => alert("Thành công!"));
+};
+
+// --- LOGIC LỌC TÌM KIẾM (Cập nhật để hoạt động với phân trang) ---
 window.filterInvoices = () => {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const filterDate = document.getElementById('filterDate').value; 
-    const rows = document.querySelectorAll('#invoiceTableBody tr');
-    rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        const dateCell = row.querySelector('td:first-child').innerText; 
-        let rowDateIso = "";
-        if (dateCell.includes('/')) {
-            const parts = dateCell.split('/');
-            rowDateIso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const fromDate = document.getElementById('filterFromDate').value; // Định dạng YYYY-MM-DD
+    const toDate = document.getElementById('filterToDate').value;     // Định dạng YYYY-MM-DD
+
+    get(ref(db, 'invoices')).then(snap => {
+        if (snap.exists()) {
+            const all = Object.entries(snap.val());
+            
+            dataStore.muahang = all.filter(([k, val]) => {
+                // 1. Lọc theo văn bản (Tìm kiếm nhanh)
+                const txt = JSON.stringify(val).toLowerCase();
+                const matchText = txt.includes(q);
+
+                // 2. Lọc theo khoảng ngày
+                const dc = val.NgayNhap || "";
+                let isoDate = "";
+                if (dc.includes('/')) {
+                    const p = dc.split('/');
+                    // Chuyển DD/MM/YYYY thành YYYY-MM-DD để so sánh chuẩn
+                    isoDate = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+                }
+
+                const matchFrom = !fromDate || isoDate >= fromDate;
+                const matchTo = !toDate || isoDate <= toDate;
+
+                return matchText && matchFrom && matchTo;
+            }).sort((a, b) => {
+                const parse = (s) => {
+                    if (!s || !s.includes('/')) return 0;
+                    const p = s.split('/');
+                    return parseInt(p[2] + p[1].padStart(2, '0') + p[0].padStart(2, '0'));
+                };
+                return parse(b[1].NgayNhap) - parse(a[1].NgayNhap);
+            });
+
+            currentPage.muahang = 1;
+            renderInvoiceTable();
         }
-        const matchesSearch = text.includes(searchTerm);
-        const matchesDate = !filterDate || rowDateIso === filterDate;
-        row.style.display = (matchesSearch && matchesDate) ? "" : "none";
     });
 };
 
+// Đừng quên cập nhật hàm Reset để xóa cả 2 ô ngày
 window.resetFilter = () => {
     document.getElementById('searchInput').value = "";
-    document.getElementById('filterDate').value = "";
-    window.filterInvoices();
+    document.getElementById('filterFromDate').value = "";
+    document.getElementById('filterToDate').value = "";
+    filterInvoices();
 };
 
-// --- LOGIC LỌC TÌM KIẾM ĐA NĂNG (BÁN HÀNG) ---
 window.filterSales = () => {
-    const searchTerm = document.getElementById('searchBanHang').value.toLowerCase();
-    const filterDate = document.getElementById('filterDateSale').value;
-    const rows = document.querySelectorAll('#salesTableBody tr');
-    rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        const dateCell = row.querySelector('td:first-child').innerText;
-        let rowDateIso = "";
-        if (dateCell.includes('/')) {
-            const parts = dateCell.split('/');
-            rowDateIso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    const q = document.getElementById('searchBanHang').value.toLowerCase();
+    const fromDate = document.getElementById('filterFromDateSale').value; // YYYY-MM-DD
+    const toDate = document.getElementById('filterToDateSale').value;     // YYYY-MM-DD
+
+    get(ref(db, 'sales')).then(snap => {
+        if (snap.exists()) {
+            const all = Object.entries(snap.val());
+            
+            dataStore.banhang = all.filter(([k, val]) => {
+                // 1. Lọc theo văn bản (Tìm kiếm nhanh)
+                const txt = JSON.stringify(val).toLowerCase();
+                const matchText = txt.includes(q);
+
+                // 2. Xử lý ngày tháng linh hoạt (NgayBan hoặc Ngayban)
+                const dateRaw = val.NgayBan || val.Ngayban || "";
+                let isoDate = "";
+                
+                if (dateRaw.includes('/')) {
+                    const p = dateRaw.split('/');
+                    // Chuyển DD/MM/YYYY thành YYYY-MM-DD để so sánh chuẩn
+                    isoDate = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+                }
+
+                // 3. Logic so sánh khoảng ngày
+                const matchFrom = !fromDate || isoDate >= fromDate;
+                const matchTo = !toDate || isoDate <= toDate;
+
+                return matchText && matchFrom && matchTo;
+            }).sort((a, b) => {
+                const parse = (s) => {
+                    if (!s || !s.includes('/')) return 0;
+                    const p = s.split('/');
+                    return parseInt(p[2] + p[1].padStart(2, '0') + p[0].padStart(2, '0'));
+                };
+                const dateA = a[1].NgayBan || a[1].Ngayban || "";
+                const dateB = b[1].NgayBan || b[1].Ngayban || "";
+                return parse(dateB) - parse(dateA);
+            });
+
+            currentPage.banhang = 1;
+            renderSalesTable();
         }
-        const matchesSearch = text.includes(searchTerm);
-        const matchesDate = !filterDate || rowDateIso === filterDate;
-        row.style.display = (matchesSearch && matchesDate) ? "" : "none";
     });
 };
 
+// Hàm Reset cho phần Bán hàng
 window.resetFilterSale = () => {
     document.getElementById('searchBanHang').value = "";
-    document.getElementById('filterDateSale').value = "";
-    window.filterSales();
+    document.getElementById('filterFromDateSale').value = "";
+    document.getElementById('filterToDateSale').value = "";
+    filterSales();
 };
-
-// --- ĐĂNG KÝ HÀM XÓA VÀO WINDOW ĐỂ GỌI ĐƯỢC TỪ HTML ---
