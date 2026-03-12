@@ -172,37 +172,53 @@
         };
 
         function renderList(items, container, type) {
-            if (items.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không tìm thấy kết quả</p>`; return; }
-            
-            container.innerHTML = items.map(([key, d]) => {
-                const isDebt = (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán");
-                const payLabel = isDebt ? "Chưa thanh toán" : "Đã thanh toán";
-                const payColor = isDebt ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600";
-                const date = d.NgayNhap || d.NgayBan;
-                const mainName = d.NhaCungCap || d.KhachHang;
-                const subId = d.SoPhieuNhap || d.SoHoaDon;
+    if (items.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 mt-10">Không tìm thấy kết quả</p>`; return; }
+    
+    container.innerHTML = items.map(([key, d]) => {
+        const isDebt = (d.HinhThucThanhToan === "Công Nợ" || d.HinhThucThanhToan === "Chưa thanh toán");
+        const payLabel = isDebt ? "Chưa thanh toán" : "Đã thanh toán";
+        const payColor = isDebt ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700";
+        const date = d.NgayNhap || d.NgayBan;
+        const mainName = d.NhaCungCap || d.KhachHang;
+        const subId = d.SoPhieuNhap || d.SoHoaDon;
 
-                return `
-                    <div class="bg-white p-4 rounded-2xl border border-gray-100 card-shadow">
-                        <div class="flex justify-between items-start mb-3">
-                            <div>
-                                <h3 class="font-bold text-gray-800 text-sm leading-tight">${mainName}</h3>
-                                <p class="text-[10px] text-blue-600 mt-0.5"><i class="fas fa-hashtag text-[8px]"></i> ${subId || 'N/A'}</p>
-                            </div>
-                            <span class="text-[10px] font-bold text-gray-400">${date}</span>
-                        </div>
-                        <div class="space-y-1.5 mb-3">
-                            ${(d.ChiTiet || []).map(i => `<div class="flex justify-between text-xs bg-gray-50 p-2 rounded-lg"><span>${i.MaSP}</span><span class="font-bold text-blue-600">x${i.SoLuong}</span></div>`).join('')}
-                        </div>
-                        <div class="flex justify-between items-end pt-2 border-t border-dashed border-gray-100">
-                            <div><p class="text-[9px] text-gray-400 font-bold uppercase">Tổng tiền</p><p class="text-base font-black ${type==='muahang'?'text-red-600':'text-blue-600'} font-mono">${(Number(d.ThanhTien) || 0).toLocaleString()}đ</p></div>
-                            <div class="text-right"><span class="${payColor} px-2 py-0.5 rounded text-[9px] font-black uppercase">${payLabel}</span></div>
-                        </div>
+        return `
+            <div class="bg-white p-4 rounded-2xl border border-gray-100 card-shadow">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <h3 class="font-bold text-gray-800 text-sm leading-tight">${mainName}</h3>
+                        <p class="text-[10px] text-blue-600 mt-0.5"><i class="fas fa-hashtag text-[8px]"></i> ${subId || 'N/A'}</p>
                     </div>
-                `;
-            }).join('');
-        }
+                    <span class="text-[10px] font-bold text-gray-400">${date}</span>
+                </div>
+                
+                <div class="space-y-1.5 mb-3">
+                    ${(d.ChiTiet || []).map(i => `
+                        <div class="bg-gray-50 p-2 rounded-lg">
+                            <div class="text-xs text-gray-700 font-medium mb-1">${i.MaSP}</div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] text-blue-600 font-bold">SL: ${i.SoLuong}</span>
+                                <span class="text-[10px] text-gray-400 italic">Giá: ${(Number(i.GiaNhap || i.DonGia) || 0).toLocaleString()}đ</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
 
+                <div class="flex justify-between items-end pt-2 border-t border-dashed border-gray-100">
+                    <div>
+                        <p class="text-[9px] text-gray-400 font-bold uppercase">${type === 'muahang' ? 'Tổng chi' : 'Tổng thu'}</p>
+                        <p class="text-base font-black ${type==='muahang'?'text-red-600':'text-blue-600'} font-mono">
+                            ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <span class="${payColor} px-2 py-0.5 rounded text-[9px] font-black uppercase">${payLabel}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
         window.resetMobileFilter = () => {
             document.getElementById('mobileSearchInput').value = "";
             document.getElementById('mobileFromDate').value = "";
