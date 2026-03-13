@@ -288,6 +288,10 @@ window.renderInvoiceTable = () => {
         let driveLink = (d.LinkHoaDon && typeof d.LinkHoaDon === 'object') ? d.LinkHoaDon.Url : d.LinkHoaDon;
         const driveIcon = driveLink ? `<a href="${driveLink}" target="_blank" class="text-green-500 hover:text-green-700 transition"><i class="fab fa-google-drive"></i></a>` : "";
         
+        // --- Logic Tình trạng Hóa đơn ---
+        const invStatus = d.TinhTrangHoaDon || 'Chưa nhận HĐ';
+        const isInvDone = invStatus.includes('Đã nhận');
+
         return `
         <tr class="hover:bg-slate-50/80 transition-colors">
             <td class="p-4 text-slate-500 font-medium align-top">${d.NgayNhap || ''}</td>
@@ -316,11 +320,15 @@ window.renderInvoiceTable = () => {
             <td class="p-4 text-right align-top amount-highlight">
                 ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
             </td>
+            
             <td class="p-4 text-center align-top">
-                <span class="px-2 py-1 rounded-lg text-[10px] font-bold border ${d.TinhTrangHoaDon === 'Đã Nhận HĐ' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-slate-400 bg-slate-50 border-slate-200'}">
-                    ${d.TinhTrangHoaDon || 'Chưa nhận'}
-                </span>
+                <button onclick="window.toggleInvoiceStatus('${key}', '${invStatus}')" 
+                    class="status-badge ${isInvDone ? 'badge-paid' : 'badge-unpaid'} transition-transform active:scale-95">
+                    <i class="fas ${isInvDone ? 'fa-check-circle' : 'fa-clock'} mr-1.5"></i>
+                    ${invStatus}
+                </button>
             </td>
+
             <td class="p-4 text-center align-top">
                 <button onclick="toggleInvoicePayment('${key}', '${rawStatus}')" class="status-badge ${badgeClass} transition-transform active:scale-95">
                     <span class="dot ${dotClass}"></span>
@@ -357,8 +365,7 @@ window.renderSalesTable = () => {
         const badgeClass = isPaid ? 'badge-paid' : 'badge-unpaid';
         const dotClass = isPaid ? 'dot-success' : 'dot-danger';
         
-        // --- XỬ LÝ AN TOÀN KÝ TỰ ĐẶC BIỆT (FIX LỖI LIỆT TRANG) ---
-        // Thay thế dấu nháy đơn ' thành \' để không làm gãy HTML onclick
+        // --- XỬ LÝ AN TOÀN KÝ TỰ ĐẶC BIỆT ---
         const safeKH = (d.KhachHang || "").replace(/'/g, "\\'");
         const safeCN = (d.ChiNhanh || "").replace(/'/g, "\\'");
         const safeVAT = (d.SoHDVAT || "Chưa có").replace(/'/g, "\\'");
@@ -375,6 +382,10 @@ window.renderSalesTable = () => {
             const url = (dd && typeof dd === 'object') ? dd.Url : dd;
             if (url) driveIcon = `<a href="${url}" target="_blank" class="text-blue-500 hover:text-blue-700 transition"><i class="fab fa-google-drive"></i></a>`;
         } catch (e) { driveIcon = ""; }
+
+        // --- Logic Tình trạng Hóa đơn Bán hàng ---
+        const statusRaw = d.TinhTrangHoaDon || 'Chưa xuất HĐ';
+        const isCompleted = statusRaw.includes('Đã');
 
         return `
         <tr class="hover:bg-slate-50/80 transition-colors">
@@ -408,12 +419,15 @@ window.renderSalesTable = () => {
             <td class="p-4 text-right align-top amount-highlight text-blue-600">
                 ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
             </td>
+            
             <td class="p-4 text-center align-top">
-                <span class="status-badge ${(d.TinhTrangHoaDon || '').includes('Đã') ? 'badge-paid' : 'badge-unpaid'} shadow-sm">
-                    <i class="fas ${(d.TinhTrangHoaDon || '').includes('Đã') ? 'fa-check-double' : 'fa-history'} mr-1.5"></i>
-                    ${d.TinhTrangHoaDon || 'Chưa xuất HĐ'}
-                </span>
+                <button onclick="window.toggleSaleStatus('${key}', '${statusRaw}')" 
+                    class="status-badge ${isCompleted ? 'badge-paid' : 'badge-unpaid'} transition-transform active:scale-95">
+                    <i class="fas ${isCompleted ? 'fa-check-double' : 'fa-history'} mr-1.5"></i>
+                    ${statusRaw}
+                </button>
             </td>
+
             <td class="p-4 text-center align-top">
                 <button onclick="window.toggleSalePayment('${key}', '${rawStatus}')" class="status-badge ${badgeClass} transition-transform active:scale-95">
                     <span class="dot ${dotClass}"></span>
@@ -428,7 +442,6 @@ window.renderSalesTable = () => {
         </tr>`;
     }).join('');
     
-    // Gọi hàm phân trang đồng bộ
     window.renderPagination('banhang', dataStore.banhang.length);
 };
 
@@ -614,7 +627,89 @@ window.filterSales = () => {
         }
     });
 };
+// Xử lý đổi trạng thái Hóa đơn cho Bán hàng
+window.toggleSaleStatus = async (key, currentStatus) => {
+    // Chuẩn hóa chuỗi để so sánh (bỏ khoảng trắng, viết thường)
+    const status = (currentStatus || "").trim().toLowerCase();
+    
+    // Kiểm tra xem đã hoàn thành chưa (chứa chữ "đã xuất")
+    const isCompleted = status.includes("đã xuất");
+    
+    const nextStatus = isCompleted ? "Chưa xuất HĐ" : "Đã xuất HĐ";
+    const confirmMsg = isCompleted 
+        ? "Bạn muốn hủy trạng thái xuất hóa đơn và XÓA link đã lưu?" 
+        : "Xác nhận ĐÃ XUẤT hóa đơn và nhập link lưu trữ?";
 
+    if (confirm(confirmMsg)) {
+        let updateData = { TinhTrangHoaDon: nextStatus };
+        
+        if (!isCompleted) {
+            // Trường hợp: Chưa xuất -> Đã xuất (Hỏi link)
+            const link = prompt("Vui lòng dán Link Google Drive của hóa đơn:");
+            if (link !== null && link.trim() !== "") {
+                updateData.LinkHoaDon = link.trim();
+            } else if (link === null) {
+                return; // Người dùng bấm Cancel thì thoát luôn, không đổi trạng thái
+            }
+            // Nếu bấm OK mà để trống thì vẫn cho đổi trạng thái nhưng ko có link
+        } else {
+            // Trường hợp: Đã xuất -> Chưa xuất (Xóa link)
+            updateData.LinkHoaDon = null; 
+        }
+        
+        try {
+            await update(ref(db, `sales/${key}`), updateData);
+        } catch (error) {
+            console.error("Lỗi cập nhật Bán hàng:", error);
+            alert("Không thể cập nhật dữ liệu!");
+        }
+    }
+};
+// Xử lý đổi trạng thái Hóa đơn cho Mua hàng
+window.toggleInvoiceStatus = async (key, currentStatus) => {
+    // Chuẩn hóa trạng thái hiện tại: viết thường, bỏ khoảng trắng dư
+    const status = (currentStatus || "").trim().toLowerCase();
+    
+    // Kiểm tra xem đã hoàn thành chưa (chứa chữ "đã nhận")
+    const isCompleted = status.includes("đã nhận");
+    
+    // Thiết lập trạng thái tiếp theo dựa trên trạng thái hiện tại
+    const nextStatus = isCompleted ? "Chưa nhận HĐ" : "Đã nhận HĐ";
+    
+    // Thông báo xác nhận hành động
+    const confirmMsg = isCompleted 
+        ? "Hủy trạng thái Đã nhận và XÓA link hóa đơn mua hàng này?" 
+        : "Xác nhận ĐÃ NHẬN hóa đơn và nhập link Google Drive lưu trữ?";
+
+    if (confirm(confirmMsg)) {
+        let updateData = { TinhTrangHoaDon: nextStatus };
+        
+        if (!isCompleted) {
+            // Trường hợp: Chưa nhận -> Đã nhận (Yêu cầu nhập link)
+            const link = prompt("Vui lòng dán Link Google Drive của hóa đơn mua hàng:");
+            
+            // Nếu bấm Cancel (link === null), thoát luôn không làm gì
+            if (link === null) return;
+
+            // Nếu bấm OK và có nhập link, thêm vào dữ liệu update
+            if (link.trim() !== "") {
+                updateData.LinkHoaDon = link.trim();
+            }
+        } else {
+            // Trường hợp: Đã nhận -> Chưa nhận (Gán null để Firebase xóa hẳn field Link)
+            updateData.LinkHoaDon = null; 
+        }
+        
+        try {
+            // Cập nhật lên node 'invoices'
+            await update(ref(db, `invoices/${key}`), updateData);
+            console.log(`Updated invoice ${key} to ${nextStatus}`);
+        } catch (error) {
+            console.error("Lỗi cập nhật Mua hàng:", error);
+            alert("Lỗi kết nối Firebase, vui lòng thử lại!");
+        }
+    }
+};
 // Hàm Reset cho phần Bán hàng
 window.resetFilterSale = () => {
     document.getElementById('searchBanHang').value = "";
