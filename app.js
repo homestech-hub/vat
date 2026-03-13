@@ -40,46 +40,74 @@ window.toggleModal = (id) => {
     if (modal) modal.classList.toggle('hidden');
 };
 
-// --- LOGIC PHÂN TRANG CHUYÊN NGHIỆP ---
+// --- LOGIC PHÂN TRANG ĐỒNG BỘ SIÊU MƯỢT ---
+
 window.renderPagination = (type, totalItems) => {
     const totalPages = Math.ceil(totalItems / rowsPerPage);
     const container = document.getElementById(`pagination-${type}`);
     const info = document.getElementById(`total-info-${type}`);
-    if (!container) return;
+    
+    if (!container || !info) return;
 
     if (totalItems === 0) {
         container.innerHTML = "";
-        info.innerText = "Không có dữ liệu";
+        info.innerText = "Trống";
         return;
     }
 
     let html = "";
-    // Nút Trước
-    html += `<button onclick="changePage('${type}', ${currentPage[type] - 1})" ${currentPage[type] === 1 ? 'disabled' : ''} class="page-node px-2 w-auto min-w-[32px] disabled:opacity-30">Trước</button>`;
+    
+    // Nút "Trước"
+    html += `<button onclick="window.changePage('${type}', ${currentPage[type] - 1})" 
+                ${currentPage[type] === 1 ? 'disabled' : ''} 
+                class="page-node px-3 w-auto disabled:opacity-20 disabled:cursor-not-allowed hover:bg-slate-100 transition-all">
+                <i class="fas fa-chevron-left text-[10px]"></i>
+            </button>`;
 
-    // Các nút số trang thông minh
+    // Các nút số trang
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= currentPage[type] - 1 && i <= currentPage[type] + 1)) {
-            html += `<button onclick="changePage('${type}', ${i})" class="page-node ${currentPage[type] === i ? 'active' : ''}">${i}</button>`;
+            html += `<button onclick="window.changePage('${type}', ${i})" 
+                        class="page-node ${currentPage[type] === i ? 'active shadow-sm border-blue-400' : 'hover:bg-slate-100'} transition-all">
+                        ${i}
+                    </button>`;
         } else if (i === currentPage[type] - 2 || i === currentPage[type] + 2) {
-            html += `<span class="px-1 text-gray-400">...</span>`;
+            html += `<span class="px-1 text-slate-300">...</span>`;
         }
     }
 
-    // Nút Sau
-    html += `<button onclick="changePage('${type}', ${currentPage[type] + 1})" ${currentPage[type] >= totalPages ? 'disabled' : ''} class="page-node px-2 w-auto min-w-[32px] disabled:opacity-30">Sau</button>`;
+    // Nút "Sau"
+    html += `<button onclick="window.changePage('${type}', ${currentPage[type] + 1})" 
+                ${currentPage[type] >= totalPages ? 'disabled' : ''} 
+                class="page-node px-3 w-auto disabled:opacity-20 disabled:cursor-not-allowed hover:bg-slate-100 transition-all">
+                <i class="fas fa-chevron-right text-[10px]"></i>
+            </button>`;
 
     container.innerHTML = html;
-    info.innerText = `Tổng cộng ${totalItems} đơn | Trang ${currentPage[type]}/${totalPages}`;
+    
+    // Cập nhật thông tin dòng hiển thị
+    const start = (currentPage[type] - 1) * rowsPerPage + 1;
+    const end = Math.min(currentPage[type] * rowsPerPage, totalItems);
+    info.innerHTML = `Hiển thị <span class="font-black text-sky-600">${start}-${end}</span> / <span class="font-black">${totalItems}</span> đơn`;
 };
 
+// Hàm chuyển trang dùng chung nhưng xử lý riêng biệt
 window.changePage = (type, page) => {
+    if (!dataStore[type]) return;
     const totalPages = Math.ceil(dataStore[type].length / rowsPerPage);
     if (page < 1 || page > totalPages) return;
+
     currentPage[type] = page;
-    if (type === 'muahang') renderInvoiceTable();
-    else renderSalesTable();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (type === 'muahang') {
+        window.renderInvoiceTable();
+    } else if (type === 'banhang') {
+        window.renderSalesTable();
+    }
+
+    // Cuộn mượt về đầu bảng để tạo cảm giác App chuyên nghiệp
+    const sectionId = type === 'muahang' ? 'section-muahang' : 'section-banhang';
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 // --- QUẢN LÝ CHI PHÍ LƯƠNG ---
@@ -307,8 +335,15 @@ window.renderInvoiceTable = () => {
 window.renderSalesTable = () => {
     const salesTbody = document.getElementById('salesTableBody');
     if (!salesTbody) return;
+
     const start = (currentPage.banhang - 1) * rowsPerPage;
     const paginated = dataStore.banhang.slice(start, start + rowsPerPage);
+
+    if (paginated.length === 0) {
+        salesTbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-bold uppercase text-[10px]">Trống dữ liệu</td></tr>`;
+        window.renderPagination('banhang', dataStore.banhang.length);
+        return;
+    }
 
     salesTbody.innerHTML = paginated.map(([key, d]) => {
         const rawStatus = d.HinhThucThanhToan || "";
@@ -317,16 +352,24 @@ window.renderSalesTable = () => {
         const badgeClass = isPaid ? 'badge-paid' : 'badge-unpaid';
         const dotClass = isPaid ? 'dot-success' : 'dot-danger';
         
+        // --- XỬ LÝ AN TOÀN KÝ TỰ ĐẶC BIỆT (FIX LỖI LIỆT TRANG) ---
+        // Thay thế dấu nháy đơn ' thành \' để không làm gãy HTML onclick
+        const safeKH = (d.KhachHang || "").replace(/'/g, "\\'");
+        const safeCN = (d.ChiNhanh || "").replace(/'/g, "\\'");
+        const safeVAT = (d.SoHDVAT || "Chưa có").replace(/'/g, "\\'");
+        
+        const kh = d.KhachHang || '', cn = d.ChiNhanh || '', shd = d.SoHoaDon || 'N/A';
+        const isStrictDoiDep = kh.trim().toUpperCase() === "ĐÔI DÉP";
+        const disp = (isStrictDoiDep && cn) ? cn : kh;
+
+        // Xử lý Google Drive Link
         let driveIcon = "";
         try {
             let dd = d.LinkHoaDon;
             if (typeof dd === 'string' && dd.startsWith('{')) dd = JSON.parse(dd);
-            if (dd && dd.Url) driveIcon = `<a href="${dd.Url}" target="_blank" class="text-blue-500 hover:text-blue-700 transition"><i class="fab fa-google-drive"></i></a>`;
+            const url = (dd && typeof dd === 'object') ? dd.Url : dd;
+            if (url) driveIcon = `<a href="${url}" target="_blank" class="text-blue-500 hover:text-blue-700 transition"><i class="fab fa-google-drive"></i></a>`;
         } catch (e) { driveIcon = ""; }
-
-        const kh = d.KhachHang || '', cn = d.ChiNhanh || '', shd = d.SoHoaDon || 'N/A', svat = d.SoHDVAT || 'Chưa có';
-        const isStrictDoiDep = kh.trim().toUpperCase() === "ĐÔI DÉP";
-        const disp = (isStrictDoiDep && cn) ? cn : kh;
 
         return `
         <tr class="hover:bg-slate-50/80 transition-colors">
@@ -339,15 +382,15 @@ window.renderSalesTable = () => {
                         <span class="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-mono">Đơn: ${shd}</span>
                         ${kh.toLowerCase().includes("đôi dép") ? `
                             <div class="flex items-center gap-1.5">
-                                <span class="text-[10px] text-orange-600 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">VAT: ${svat}</span>
-                                <button onclick="updateVatInvoice('${key}', '${svat}')" class="text-[10px] text-blue-600 hover:underline font-bold">Sửa</button>
+                                <span class="text-[10px] text-orange-600 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">VAT: ${d.SoHDVAT || 'Chưa có'}</span>
+                                <button onclick="window.updateVatInvoice('${key}', '${safeVAT}')" class="text-[10px] text-blue-600 hover:underline font-bold">Sửa</button>
                             </div>` : ''}
                     </div>
                 </div>
             </td>
             <td class="p-4 align-top">
                 <div class="flex flex-col gap-1.5">
-                    ${(d.ChiTiet || []).map(i => `
+                    ${(Array.isArray(d.ChiTiet) ? d.ChiTiet : []).map(i => `
                         <div class="text-[12px] text-slate-600 border-l-2 border-slate-200 pl-2 py-0.5">
                             <span class="font-medium text-slate-800">${i.MaSP}</span>
                             <div class="flex gap-2 text-[10px] font-bold">
@@ -361,35 +404,27 @@ window.renderSalesTable = () => {
                 ${(Number(d.ThanhTien) || 0).toLocaleString()}đ
             </td>
             <td class="p-4 text-center align-top">
-    ${(() => {
-        // Chuẩn hóa dữ liệu đầu vào: nếu trống thì coi là chưa xuất
-        const statusRaw = d.TinhTrangHoaDon || 'Chưa xuất HĐ';
-        
-        // Kiểm tra logic: Nếu chứa chữ "Đã" thì tính là trạng thái hoàn thành
-        const isCompleted = statusRaw.includes('Đã');
-
-        return `
-            <span class="status-badge ${isCompleted ? 'badge-paid' : 'badge-unpaid'} shadow-sm">
-                <i class="fas ${isCompleted ? 'fa-check-double' : 'fa-history'} mr-1.5"></i>
-                ${statusRaw}
-            </span>
-        `;
-    })()}
-</td>
+                <span class="status-badge ${(d.TinhTrangHoaDon || '').includes('Đã') ? 'badge-paid' : 'badge-unpaid'} shadow-sm">
+                    <i class="fas ${(d.TinhTrangHoaDon || '').includes('Đã') ? 'fa-check-double' : 'fa-history'} mr-1.5"></i>
+                    ${d.TinhTrangHoaDon || 'Chưa xuất HĐ'}
+                </span>
+            </td>
             <td class="p-4 text-center align-top">
-                <button onclick="toggleSalePayment('${key}', '${rawStatus}')" class="status-badge ${badgeClass} transition-transform active:scale-95">
+                <button onclick="window.toggleSalePayment('${key}', '${rawStatus}')" class="status-badge ${badgeClass} transition-transform active:scale-95">
                     <span class="dot ${dotClass}"></span>
                     ${payLabel}
                 </button>
             </td>
             <td class="p-4 text-center align-top">
-                <button onclick="deleteSale('${key}')" class="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                <button onclick="window.deleteSale('${key}')" class="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
                     <i class="fas fa-trash-alt text-sm"></i>
                 </button>
             </td>
         </tr>`;
     }).join('');
-    renderPagination('banhang', dataStore.banhang.length);
+    
+    // Gọi hàm phân trang đồng bộ
+    window.renderPagination('banhang', dataStore.banhang.length);
 };
 
 // --- KHỞI TẠO ỨNG DỤNG ---
