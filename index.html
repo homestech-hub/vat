@@ -160,6 +160,12 @@
             if (isMobile) { window.location.href = 'mobile.html'; }
         })();
     </script>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0284c7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HT VAT">
+    <link rel="apple-touch-icon" href="https://cameradalat.com/wp-content/uploads/2026/03/logoapp.jpg">
 </head>
 <body>
 
@@ -561,7 +567,14 @@
         document.getElementById('salaryModalTitle').innerText = 'Thêm phiếu lương mới';
         toggleModal('modal-luong');
     }
+    // --- PWA SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('PWA Ready:', reg.scope))
+                    .catch(err => console.error('PWA Error:', err));
+            });
+        }
 </script>
 </body>
 </html>
-
