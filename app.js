@@ -298,14 +298,19 @@ window.renderInvoiceTable = () => {
                 </div>
             </td>
             <td class="p-4 align-top">
-                <div class="flex flex-col gap-1.5">
-                    ${(d.ChiTiet || []).map((i, idx) => `
-                        <div class="text-[12px] text-slate-600 border-l-2 border-slate-200 pl-2 py-0.5">
-                            <span class="font-semibold text-slate-800">${i.MaSP}</span>
-                            <span class="text-slate-400 mx-1">•</span>
-                            <span class="text-blue-600 font-bold">x${i.SoLuong}</span>
-                        </div>
-                    `).join('')}
+                <div class="flex flex-col gap-2">
+                    ${(d.ChiTiet || []).map((i, idx) => {
+                        const gia = Number(i.GiaNhap || 0);
+                        return `
+                        <div class="text-[12px] text-slate-600 border-l-2 border-slate-200 pl-3 py-0.5">
+                            <div class="font-semibold text-slate-800">${i.MaSP}</div>
+                            <div class="flex gap-3 text-[10px] mt-0.5 font-bold">
+                                <span class="text-blue-600">x${i.SoLuong}</span>
+                                <span class="text-slate-400 italic">Giá: ${gia.toLocaleString()}đ</span>
+                                <span class="text-slate-500">T.Tiền: ${(gia * i.SoLuong).toLocaleString()}đ</span>
+                            </div>
+                        </div>`;
+                    }).join('')}
                 </div>
             </td>
             <td class="p-4 text-right align-top amount-highlight">
